@@ -1,0 +1,51 @@
+{
+  "name": "@meshtour/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic engine for mesh-backed photorealistic virtual tours: equirectangular panoramas projected onto an invisible proxy mesh, with parallax-correct walking transitions, object-aware interaction, and occlusion-aware hotspots.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "virtual-tour",
+    "panorama",
+    "equirectangular",
+    "threejs",
+    "webgl",
+    "matterport",
+    "archviz",
+    "360"
+  ],
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "dependencies": {
+    "three-mesh-bvh": "^0.9.10",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.0",
+    "three": "^0.184.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.6"
+  }
+}
