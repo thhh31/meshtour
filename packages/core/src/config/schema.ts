@@ -14,6 +14,8 @@ export const linkSchema = z.object({
   to: z.string().min(1),
   /** World-space placement of the floor disc, Y-up meters. */
   position: vec3Schema,
+  /** Hide this shared marker while its target node is current (default true). */
+  hideAtTarget: z.boolean().optional(),
 });
 export type LinkConfig = z.infer<typeof linkSchema>;
 
@@ -53,7 +55,7 @@ export type HotspotType = z.infer<typeof hotspotTypeSchema>;
 
 export const hotspotSchema = z.object({
   id: z.string().min(1),
-  /** Node this hotspot belongs to. Omit for a global hotspot (visible from every node). */
+  /** Node this hotspot belongs to. Omit for a shared hotspot (visible from every node). */
   node: z.string().optional(),
   /** Anchor position in world space, Y-up meters. */
   position: vec3Schema,
@@ -92,6 +94,8 @@ export const renderingSchema = z.object({
   fullSuffix: z.string().optional(),
   /** Clear color behind everything, and the fallback when a panorama is missing. */
   background: z.string().default("#0b0b0e"),
+  /** Camera-travel projection, or a clean fade for sparse/imperfect proxies. */
+  transition: z.enum(["walk", "fade"]).default("walk"),
 });
 export type RenderingConfig = z.infer<typeof renderingSchema>;
 
@@ -107,6 +111,120 @@ export const interactablesSchema = z.object({
 });
 export type InteractablesConfig = z.infer<typeof interactablesSchema>;
 
+export const planBoundsSchema = z
+  .object({
+    /** Minimum [x, z] corner in world-space meters. */
+    min: z.tuple([z.number(), z.number()]),
+    /** Maximum [x, z] corner in world-space meters. */
+    max: z.tuple([z.number(), z.number()]),
+  })
+  .refine((bounds) => bounds.max[0] > bounds.min[0] && bounds.max[1] > bounds.min[1], {
+    message: "Plan bounds max must be greater than min",
+  });
+export type PlanBoundsConfig = z.infer<typeof planBoundsSchema>;
+
+export const worldBoundsSchema = z
+  .object({
+    min: vec3Schema,
+    max: vec3Schema,
+  })
+  .refine(
+    (bounds) =>
+      bounds.max[0] > bounds.min[0] &&
+      bounds.max[1] > bounds.min[1] &&
+      bounds.max[2] > bounds.min[2],
+    { message: "World bounds max must be greater than min" },
+  );
+export type WorldBoundsConfig = z.infer<typeof worldBoundsSchema>;
+
+export const ceilingSchema = z.object({
+  /** Finished underside height. */
+  y: z.number(),
+  /** Thin generated fallback slab. Source geometry named like a ceiling takes precedence. */
+  thickness: z.number().positive().default(0.08),
+  bounds: planBoundsSchema,
+});
+export type CeilingConfig = z.infer<typeof ceilingSchema>;
+
+export const topViewSchema = z.object({
+  /** Display-referred orthographic render, resolved against assets.basePath. */
+  url: z.string().min(1),
+  /** World X/Z extent represented by the full image; defaults to overview.bounds. */
+  bounds: planBoundsSchema.optional(),
+});
+export type TopViewConfig = z.infer<typeof topViewSchema>;
+
+export const measurementAxisSchema = z.enum(["width", "depth", "height"]);
+export type MeasurementAxis = z.infer<typeof measurementAxisSchema>;
+
+export const measurementSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    /** Exact proxy object/group name. Its world bounds are measured automatically. */
+    target: z.string().min(1).optional(),
+    /** Authored bounds override for architecture or irregular/rotated objects. */
+    bounds: worldBoundsSchema.optional(),
+    axes: z.array(measurementAxisSchema).min(1).default(["width", "depth", "height"]),
+    /** Always visible while measurement mode is active. */
+    defaultVisible: z.boolean().default(false),
+    /** Per-target outline override; falls back to spatial.measurementColor. */
+    color: z.string().min(1).optional(),
+    /** Draw the outline through scene geometry. */
+    alwaysOnTop: z.boolean().default(false),
+    /** Distance between the measured bounds and its dimension lines. */
+    offset: z.number().positive().default(0.18),
+  })
+  .refine((measurement) => measurement.target !== undefined || measurement.bounds !== undefined, {
+    message: "A measurement needs a target or explicit bounds",
+  });
+export type MeasurementConfig = z.infer<typeof measurementSchema>;
+
+export const spatialSchema = z.object({
+  overview: z
+    .object({
+      /** Optional stable plan crop; otherwise proxy bounds are used. */
+      bounds: planBoundsSchema.optional(),
+      floorY: z.number().default(0),
+      /** Generate a missing ceiling slab and hide it in top view. */
+      ceiling: ceilingSchema.optional(),
+      /** Optional baked orthographic render used instead of panorama reprojection. */
+      topView: topViewSchema.optional(),
+      /** Additional proxy object names to omit from plan/top rendering. */
+      hiddenMeshes: z.array(z.string().min(1)).default([]),
+    })
+    .default({}),
+  measurementColor: z.string().min(1).default("#ffffff"),
+  measurements: z.array(measurementSchema).default([]),
+});
+export type SpatialConfig = z.infer<typeof spatialSchema>;
+
+/** One selectable appearance for a configurable proxy-mesh group. */
+export const configurableVariantSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  /** Optional CSS color used by host UIs to render a material swatch. */
+  swatch: z.string().min(1).optional(),
+  /**
+   * Transparent equirectangular image layer per tour node. Each image must be
+   * rendered from the same capture position/orientation as that node's panorama.
+   * Missing nodes fall back to the original panorama appearance.
+   */
+  layers: z.record(z.string().min(1)).default({}),
+});
+export type ConfigurableVariantConfig = z.infer<typeof configurableVariantSchema>;
+
+/** A proxy interactable whose appearance can be replaced at runtime. */
+export const configurableSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  /** Interactable id after removing `interactables.namePrefix` (for example `sofa`). */
+  interactable: z.string().min(1),
+  default: z.string().min(1),
+  variants: z.array(configurableVariantSchema).min(1),
+});
+export type ConfigurableConfig = z.infer<typeof configurableSchema>;
+
 export const tourConfigSchema = z
   .object({
     version: z.literal(1),
@@ -115,6 +233,10 @@ export const tourConfigSchema = z
     assets: assetsSchema.default({}),
     rendering: renderingSchema.default({}),
     interactables: interactablesSchema.default({}),
+    spatial: spatialSchema.default({}),
+    configurables: z.array(configurableSchema).default([]),
+    /** Navigation links visible from every node. */
+    links: z.array(linkSchema).default([]),
     nodes: z.array(nodeSchema).min(1),
     hotspots: z.array(hotspotSchema).default([]),
     /** Starting node id. Defaults to the first node. */
@@ -139,6 +261,15 @@ export const tourConfigSchema = z
         message: `Start node "${config.start}" does not exist`,
       });
     }
+    config.links.forEach((link, i) => {
+      if (!ids.has(link.to)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["links", i, "to"],
+          message: `Link target "${link.to}" does not exist`,
+        });
+      }
+    });
     config.nodes.forEach((node, i) => {
       node.links.forEach((link, j) => {
         if (!ids.has(link.to)) {
@@ -158,6 +289,80 @@ export const tourConfigSchema = z
           message: `Hotspot node "${hotspot.node}" does not exist`,
         });
       }
+    });
+    const hotspotIds = new Set<string>();
+    config.hotspots.forEach((hotspot, i) => {
+      if (hotspotIds.has(hotspot.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["hotspots", i, "id"],
+          message: `Duplicate hotspot id "${hotspot.id}"`,
+        });
+      }
+      hotspotIds.add(hotspot.id);
+    });
+
+    const configurableIds = new Set<string>();
+    const configurableTargets = new Set<string>();
+    config.configurables.forEach((configurable, i) => {
+      if (configurableIds.has(configurable.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["configurables", i, "id"],
+          message: `Duplicate configurable id "${configurable.id}"`,
+        });
+      }
+      configurableIds.add(configurable.id);
+
+      if (configurableTargets.has(configurable.interactable)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["configurables", i, "interactable"],
+          message: `Interactable "${configurable.interactable}" has more than one configurable`,
+        });
+      }
+      configurableTargets.add(configurable.interactable);
+
+      const variantIds = new Set<string>();
+      configurable.variants.forEach((variant, j) => {
+        if (variantIds.has(variant.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["configurables", i, "variants", j, "id"],
+            message: `Duplicate variant id "${variant.id}"`,
+          });
+        }
+        variantIds.add(variant.id);
+
+        for (const nodeId of Object.keys(variant.layers)) {
+          if (!ids.has(nodeId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["configurables", i, "variants", j, "layers", nodeId],
+              message: `Variant layer node "${nodeId}" does not exist`,
+            });
+          }
+        }
+      });
+      if (!variantIds.has(configurable.default)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["configurables", i, "default"],
+          message: `Default variant "${configurable.default}" does not exist`,
+        });
+      }
+    });
+
+    const measurementIds = new Set<string>();
+    config.spatial.measurements.forEach((measurement, i) => {
+      if (measurementIds.has(measurement.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["spatial", "measurements", i, "id"],
+          message: `Duplicate measurement id "${measurement.id}"`,
+        });
+      }
+      measurementIds.add(measurement.id);
     });
   });
 
