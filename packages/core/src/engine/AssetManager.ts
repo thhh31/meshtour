@@ -30,6 +30,7 @@ interface NodeTextures {
   full?: Texture;
   previewPromise?: Promise<Texture>;
   fullPromise?: Promise<Texture>;
+  released?: boolean;
 }
 
 /**
@@ -44,6 +45,8 @@ export class AssetManager {
   private textureLoader = new TextureLoader();
   private ktx2Loader: KTX2Loader | null = null;
   private nodeTextures = new Map<string, NodeTextures>();
+  private layerTextures = new Map<string, { texture?: Texture; promise?: Promise<Texture> }>();
+  private auxiliaryTextures = new Map<string, { texture?: Texture; promise?: Promise<Texture> }>();
   private maxAnisotropy: number;
 
   /** Called when a full-res texture finishes loading after the preview was already shown. */
@@ -68,6 +71,9 @@ export class AssetManager {
     if (mesh.draco) {
       draco = new DRACOLoader();
       draco.setDecoderPath(this.options.dracoDecoderPath ?? DEFAULT_DRACO_PATH);
+      // Fetch and initialise the decoder alongside the glTF request instead of
+      // waiting for the compressed mesh download to finish first.
+      draco.preload();
       loader.setDRACOLoader(draco);
     }
     try {
@@ -87,7 +93,10 @@ export class AssetManager {
   panoramaUrl(nodeId: string, quality: "preview" | "full"): string {
     const node = this.node(nodeId);
     const { previewSuffix, fullSuffix } = this.config.rendering;
-    const suffix = quality === "preview" ? previewSuffix : fullSuffix;
+    // A single configured suffix is the sole quality; two distinct suffixes
+    // enable progressive preview -> full delivery.
+    const suffix =
+      quality === "preview" ? (previewSuffix ?? fullSuffix) : (fullSuffix ?? previewSuffix);
     return resolveAssetUrl(this.config, suffix ? node.panorama.url + suffix : node.panorama.url);
   }
 
@@ -105,7 +114,7 @@ export class AssetManager {
           .detectSupport(this.renderer);
       }
       texture = await this.ktx2Loader.loadAsync(url);
-      texture.minFilter = LinearFilter;
+      texture.minFilter = texture.mipmaps.length > 1 ? LinearMipmapLinearFilter : LinearFilter;
     } else {
       texture = await this.textureLoader.loadAsync(url);
       texture.minFilter = LinearMipmapLinearFilter;
@@ -120,6 +129,62 @@ export class AssetManager {
     return texture;
   }
 
+  /** Load and cache a transparent panorama-aligned configurable-object layer. */
+  ensureLayer(url: string): Promise<Texture> {
+    const resolved = resolveAssetUrl(this.config, url);
+    let entry = this.layerTextures.get(resolved);
+    if (!entry) {
+      entry = {};
+      this.layerTextures.set(resolved, entry);
+    }
+    if (entry.texture) return Promise.resolve(entry.texture);
+    if (!entry.promise) {
+      entry.promise = this.loadTexture(resolved).then(
+        (texture) => {
+          if (this.layerTextures.get(resolved) !== entry) {
+            texture.dispose();
+            throw new Error(`Configurable layer load for released URL "${resolved}" was discarded`);
+          }
+          entry!.texture = texture;
+          return texture;
+        },
+        (error) => {
+          this.layerTextures.delete(resolved);
+          throw error;
+        },
+      );
+    }
+    return entry.promise;
+  }
+
+  /** Load and cache a non-panorama image such as a baked orthographic overview. */
+  ensureAuxiliaryTexture(url: string): Promise<Texture> {
+    const resolved = resolveAssetUrl(this.config, url);
+    let entry = this.auxiliaryTextures.get(resolved);
+    if (!entry) {
+      entry = {};
+      this.auxiliaryTextures.set(resolved, entry);
+    }
+    if (entry.texture) return Promise.resolve(entry.texture);
+    if (!entry.promise) {
+      entry.promise = this.loadTexture(resolved).then(
+        (texture) => {
+          if (this.auxiliaryTextures.get(resolved) !== entry) {
+            texture.dispose();
+            throw new Error(`Auxiliary texture load for released URL "${resolved}" was discarded`);
+          }
+          entry!.texture = texture;
+          return texture;
+        },
+        (error) => {
+          this.auxiliaryTextures.delete(resolved);
+          throw error;
+        },
+      );
+    }
+    return entry.promise;
+  }
+
   private entry(nodeId: string): NodeTextures {
     let entry = this.nodeTextures.get(nodeId);
     if (!entry) {
@@ -129,6 +194,14 @@ export class AssetManager {
     return entry;
   }
 
+  private keepLoadedTexture(nodeId: string, entry: NodeTextures, texture: Texture): Texture {
+    if (entry.released || this.nodeTextures.get(nodeId) !== entry) {
+      texture.dispose();
+      throw new Error(`Panorama load for released node "${nodeId}" was discarded`);
+    }
+    return texture;
+  }
+
   /** Fastest available texture for the node: loads the preview (or sole) resolution. */
   ensurePreview(nodeId: string): Promise<Texture> {
     const entry = this.entry(nodeId);
@@ -136,6 +209,11 @@ export class AssetManager {
     if (!entry.previewPromise) {
       entry.previewPromise = this.loadTexture(this.panoramaUrl(nodeId, "preview")).then(
         (texture) => {
+          this.keepLoadedTexture(nodeId, entry, texture);
+          if (entry.full) {
+            texture.dispose();
+            return entry.full;
+          }
           entry.preview = texture;
           return texture;
         },
@@ -156,6 +234,7 @@ export class AssetManager {
     if (!entry.fullPromise) {
       entry.fullPromise = this.loadTexture(this.panoramaUrl(nodeId, "full")).then(
         (texture) => {
+          this.keepLoadedTexture(nodeId, entry, texture);
           const previous = entry.preview;
           entry.full = texture;
           if (previous && this.onTextureUpgraded) {
@@ -177,6 +256,8 @@ export class AssetManager {
    * ready and kicks off the full-res load in the background.
    */
   async ensureBest(nodeId: string): Promise<Texture> {
+    const full = this.nodeTextures.get(nodeId)?.full;
+    if (full) return full;
     const preview = await this.ensurePreview(nodeId);
     if (this.hasDistinctQualities()) {
       void this.ensureFull(nodeId).catch(() => {
@@ -184,6 +265,15 @@ export class AssetManager {
       });
     }
     return this.bestAvailable(nodeId) ?? preview;
+  }
+
+  /** Drop a preview after the projection has atomically adopted its full texture. */
+  discardPreview(nodeId: string, texture: Texture): void {
+    const entry = this.nodeTextures.get(nodeId);
+    if (!entry || entry.preview !== texture) return;
+    entry.preview = undefined;
+    entry.previewPromise = undefined;
+    texture.dispose();
   }
 
   bestAvailable(nodeId: string): Texture | null {
@@ -196,9 +286,9 @@ export class AssetManager {
     this.renderer.initTexture(texture);
   }
 
-  /** Background-prefetch the panoramas of the given node's direct neighbors. */
+  /** Background-prefetch panoramas reachable through shared and node-specific links. */
   prefetchNeighbors(nodeId: string): void {
-    for (const link of this.node(nodeId).links) {
+    for (const link of [...this.config.links, ...this.node(nodeId).links]) {
       void this.ensurePreview(link.to).catch(() => {});
       if (this.hasDistinctQualities()) void this.ensureFull(link.to).catch(() => {});
     }
@@ -208,6 +298,7 @@ export class AssetManager {
   releaseExcept(keep: ReadonlySet<string>): void {
     for (const [nodeId, entry] of this.nodeTextures) {
       if (keep.has(nodeId)) continue;
+      entry.released = true;
       entry.preview?.dispose();
       entry.full?.dispose();
       this.nodeTextures.delete(nodeId);
@@ -216,6 +307,10 @@ export class AssetManager {
 
   dispose(): void {
     this.releaseExcept(new Set());
+    for (const entry of this.layerTextures.values()) entry.texture?.dispose();
+    this.layerTextures.clear();
+    for (const entry of this.auxiliaryTextures.values()) entry.texture?.dispose();
+    this.auxiliaryTextures.clear();
     this.ktx2Loader?.dispose();
     this.ktx2Loader = null;
   }
