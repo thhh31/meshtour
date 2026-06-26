@@ -45,9 +45,10 @@ describe("transitionBlend", () => {
     expect(transitionBlend(1)).toBe(1);
   });
 
-  it("completes the blend by ~78% of the camera travel", () => {
-    expect(transitionBlend(0.78)).toBeCloseTo(1);
-    expect(transitionBlend(0.8)).toBe(1);
+  it("keeps the panorama handoff within the middle 16% of travel", () => {
+    expect(transitionBlend(0.41)).toBe(0);
+    expect(transitionBlend(0.5)).toBeCloseTo(0.5);
+    expect(transitionBlend(0.59)).toBe(1);
   });
 
   it("is monotonically non-decreasing", () => {

@@ -18,12 +18,12 @@ export function easeInOutCubic(t: number): number {
 }
 
 /**
- * Blend curve for the panorama crossfade during a transition. Biased so the
- * blend completes around ~78% of the camera travel, hiding the worst
- * reprojection stretching near the arrival point.
+ * Blend curve for the panorama handoff during a transition. Keeping the blend
+ * narrow avoids prolonged double exposure for fine geometry that is absent
+ * from (or imperfectly approximated by) the navigation proxy.
  */
 export function transitionBlend(t: number): number {
-  return smoothstep(0.1, 0.78, t);
+  return smoothstep(0.42, 0.58, t);
 }
 
 /**
