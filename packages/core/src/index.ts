@@ -1,6 +1,6 @@
 // Engine
 export { TourEngine } from "./engine/TourEngine";
-export type { TourEngineOptions, TourEngineState } from "./engine/TourEngine";
+export type { TourEngineOptions, TourEngineState, TourViewMode } from "./engine/TourEngine";
 export { AssetManager } from "./engine/AssetManager";
 export type { AssetManagerOptions } from "./engine/AssetManager";
 
@@ -13,6 +13,15 @@ export {
   assetsSchema,
   renderingSchema,
   interactablesSchema,
+  spatialSchema,
+  planBoundsSchema,
+  worldBoundsSchema,
+  ceilingSchema,
+  topViewSchema,
+  measurementSchema,
+  measurementAxisSchema,
+  configurableSchema,
+  configurableVariantSchema,
 } from "./config/schema";
 export type {
   TourConfig,
@@ -26,6 +35,15 @@ export type {
   AssetsConfig,
   RenderingConfig,
   InteractablesConfig,
+  SpatialConfig,
+  PlanBoundsConfig,
+  WorldBoundsConfig,
+  CeilingConfig,
+  TopViewConfig,
+  MeasurementConfig,
+  MeasurementAxis,
+  ConfigurableConfig,
+  ConfigurableVariantConfig,
   Vec3,
 } from "./config/schema";
 export { loadConfig, validateConfig, resolveAssetUrl, ConfigError } from "./config/loader";
@@ -36,7 +54,15 @@ export type { TourEventMap } from "./events";
 
 // Rendering
 export { PanoramaProjection } from "./rendering/PanoramaMaterial";
-export type { PanoramaUniforms } from "./rendering/PanoramaMaterial";
+export type {
+  PanoramaUniforms,
+  PanoramaLayerUniforms,
+  PanoramaLayerMaterial,
+} from "./rendering/PanoramaMaterial";
+
+// Spatial overview + measurements
+export { renderProxyPlan, resolvePlanBounds } from "./spatial/PlanRenderer";
+export type { PlanRenderOptions } from "./spatial/PlanRenderer";
 
 // Navigation
 export type { TransitionOptions } from "./navigation/NavigationManager";

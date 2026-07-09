@@ -1,4 +1,5 @@
 import type { HotspotConfig } from "./config/schema";
+import type { TourViewMode } from "./engine/TourEngine";
 
 export interface TourEventMap {
   /** Config + mesh + first panorama loaded; the tour is interactive. */
@@ -13,6 +14,9 @@ export interface TourEventMap {
   /** id is null when the pointer leaves all interactables. */
   interactablehover: { id: string | null };
   interactableclick: { id: string; point: [number, number, number] };
+  variantchange: { configurableId: string; variantId: string };
+  viewmodechange: { mode: TourViewMode };
+  measurementschange: { visible: boolean };
 }
 
 type Listener<T> = (payload: T) => void;

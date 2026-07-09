@@ -111,9 +111,9 @@ export class LookControls {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Per-frame: apply inertia after the pointer is released. */
-  update(dt: number): void {
-    if (this.dragging || (this.velocityYaw === 0 && this.velocityPitch === 0)) return;
+  /** Per-frame: apply inertia after the pointer is released. Returns true when the view moved. */
+  update(dt: number): boolean {
+    if (this.dragging || (this.velocityYaw === 0 && this.velocityPitch === 0)) return false;
     this.yaw += this.velocityYaw;
     this.pitch = clamp(this.pitch + this.velocityPitch, -PITCH_LIMIT, PITCH_LIMIT);
     const damping = Math.exp(-6 * dt);
@@ -122,6 +122,7 @@ export class LookControls {
     if (Math.abs(this.velocityYaw) < 1e-5) this.velocityYaw = 0;
     if (Math.abs(this.velocityPitch) < 1e-5) this.velocityPitch = 0;
     this.apply();
+    return true;
   }
 
   setYawPitch(yaw: number, pitch: number): void {

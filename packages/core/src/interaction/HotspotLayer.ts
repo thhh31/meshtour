@@ -9,6 +9,7 @@ import {
   Vector3,
 } from "three";
 import type { HotspotConfig, TourConfig } from "../config/schema";
+import { resolveAssetUrl } from "../config/loader";
 import type { TourEventEmitter } from "../events";
 import type { InteractionManager } from "./InteractionManager";
 import { clamp } from "../utils/math";
@@ -63,6 +64,7 @@ export class HotspotLayer {
   private popupAnchor: Vector3 | null = null;
   private overlay: HTMLElement;
   private defaultPopups: boolean;
+  private config: TourConfig;
   private occlusionClock = 0;
 
   constructor(
@@ -80,6 +82,7 @@ export class HotspotLayer {
     this.events = events;
     this.interaction = interaction;
     this.defaultPopups = defaultPopups;
+    this.config = config;
 
     for (const hotspot of config.hotspots) this.add(hotspot);
   }
@@ -173,7 +176,7 @@ export class HotspotLayer {
     }
     if (hotspot.media?.image) {
       const img = document.createElement("img");
-      img.src = hotspot.media.image;
+      img.src = resolveAssetUrl(this.config, hotspot.media.image);
       img.alt = hotspot.title ?? "";
       img.style.cssText = "width:100%;border-radius:6px;margin:4px 0";
       popup.appendChild(img);

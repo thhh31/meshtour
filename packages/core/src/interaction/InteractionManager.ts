@@ -30,6 +30,29 @@ export interface Pickable {
   onHoverChange?: (hovered: boolean) => void;
 }
 
+/**
+ * three.js raycasting does not consider Object3D.visible, especially when an
+ * object is intersected directly instead of through its parent. A pickable is
+ * interactive only when it and every ancestor are visible.
+ */
+export function isObjectEffectivelyVisible(object: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
+/** A marker must be in front of the first proxy surface to receive input. */
+export function isPickableInFront(
+  pickableDistance: number,
+  proxyDistance: number | null,
+  tolerance = 0.05,
+): boolean {
+  return proxyDistance === null || pickableDistance < proxyDistance + tolerance;
+}
+
 type BvhGeometry = BufferGeometry & {
   computeBoundsTree: typeof computeBoundsTree;
   disposeBoundsTree: typeof disposeBoundsTree;
@@ -64,6 +87,7 @@ export class InteractionManager {
   private downPosition: Vector2 | null = null;
   private abort = new AbortController();
   private enabled = true;
+  private proxyPickingEnabled = true;
 
   constructor(
     camera: Camera,
@@ -153,6 +177,27 @@ export class InteractionManager {
     }
   }
 
+  /** Switch picking to the camera used by the active view mode. */
+  setCamera(camera: Camera): void {
+    if (camera === this.camera) return;
+    this.camera = camera;
+    this.invalidate();
+  }
+
+  /** Top view only needs marker picking; its hidden proxy must not occlude markers. */
+  setProxyPickingEnabled(enabled: boolean): void {
+    if (enabled === this.proxyPickingEnabled) return;
+    this.proxyPickingEnabled = enabled;
+    this.setHoveredInteractable(null);
+    this.reticle.visible = false;
+    this.invalidate();
+  }
+
+  /** Re-run picking when the camera moves without a pointer event. */
+  invalidate(): void {
+    if (this.pointerInside) this.pointerDirty = true;
+  }
+
   private onPointerMove = (event: PointerEvent): void => {
     const rect = this.element.getBoundingClientRect();
     this.pointerNdc.set(
@@ -185,18 +230,21 @@ export class InteractionManager {
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
     const pickableHit = this.raycastPickables();
-    if (pickableHit) {
+    const proxyHit = this.raycastProxy();
+    if (
+      pickableHit &&
+      isPickableInFront(pickableHit.intersection.distance, proxyHit?.distance ?? null)
+    ) {
       pickableHit.pickable.onClick?.(pickableHit.intersection);
       return;
     }
 
-    const hit = this.raycastProxy();
-    if (!hit) return;
-    const sceneHit = this.toSceneHit(hit);
+    if (!proxyHit) return;
+    const sceneHit = this.toSceneHit(proxyHit);
     if (sceneHit.interactableId) {
       this.events.emit("interactableclick", {
         id: sceneHit.interactableId,
-        point: [hit.point.x, hit.point.y, hit.point.z],
+        point: [proxyHit.point.x, proxyHit.point.y, proxyHit.point.z],
       });
     }
     this.onSceneClick?.(sceneHit);
@@ -205,7 +253,7 @@ export class InteractionManager {
   private raycastPickables(): { pickable: Pickable; intersection: Intersection } | null {
     let best: { pickable: Pickable; intersection: Intersection } | null = null;
     for (const pickable of this.pickables) {
-      if (!pickable.object.visible) continue;
+      if (!isObjectEffectivelyVisible(pickable.object)) continue;
       const hits = this.raycaster.intersectObject(pickable.object, true);
       const hit = hits[0];
       if (hit && (!best || hit.distance < best.intersection.distance)) {
@@ -216,6 +264,7 @@ export class InteractionManager {
   }
 
   private raycastProxy(): Intersection | null {
+    if (!this.proxyPickingEnabled) return null;
     this.raycaster.firstHitOnly = true;
     const hits = this.raycaster.intersectObjects(this.proxyMeshes, false);
     return hits[0] ?? null;
@@ -243,7 +292,8 @@ export class InteractionManager {
     const pickableHit = this.raycastPickables();
     const proxyHit = this.raycastProxy();
     const pickableInFront =
-      pickableHit && (!proxyHit || pickableHit.intersection.distance < proxyHit.distance + 0.05);
+      pickableHit &&
+      isPickableInFront(pickableHit.intersection.distance, proxyHit?.distance ?? null);
 
     if (pickableInFront) {
       this.setHoveredPickable(pickableHit.pickable);

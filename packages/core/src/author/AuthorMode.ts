@@ -4,13 +4,14 @@ import {
   PerspectiveCamera,
   Raycaster,
   Vector2,
+  Vector3,
   type Object3D,
 } from "three";
 import type { HotspotConfig, TourConfig } from "../config/schema";
 import type { LookControls } from "../controls/LookControls";
 import type { HotspotLayer } from "../interaction/HotspotLayer";
 import type { InteractionManager, SceneHit } from "../interaction/InteractionManager";
-import type { NavigationManager } from "../navigation/NavigationManager";
+import type { AuthorLinkHandle, NavigationManager } from "../navigation/NavigationManager";
 import type { PanoramaProjection } from "../rendering/PanoramaMaterial";
 
 export interface AuthorModeContext {
@@ -28,6 +29,9 @@ export interface AuthorModeContext {
 }
 
 type ClickMode = "inspect" | "hotspot" | "link";
+type DragTarget =
+  | { kind: "hotspot"; hotspot: HotspotConfig }
+  | { kind: "link"; handle: AuthorLinkHandle };
 
 const PANEL_CSS = [
   "position:absolute",
@@ -65,7 +69,7 @@ export class AuthorMode {
   private linkTargetSelect: HTMLSelectElement;
   private hotspotCounter = 0;
   private abort = new AbortController();
-  private dragging: HotspotConfig | null = null;
+  private dragging: DragTarget | null = null;
   private dragRaycaster = new Raycaster();
 
   constructor(ctx: AuthorModeContext) {
@@ -87,6 +91,7 @@ export class AuthorMode {
     ctx.canvas.addEventListener("pointerdown", this.onPointerDown, { signal, capture: true });
     ctx.canvas.addEventListener("pointermove", this.onPointerMove, { signal });
     ctx.canvas.addEventListener("pointerup", this.onPointerUp, { signal });
+    ctx.canvas.addEventListener("pointercancel", this.onPointerUp, { signal });
   }
 
   private el(tag: string, text?: string, css?: string): HTMLElement {
@@ -180,15 +185,19 @@ export class AuthorMode {
         const a = document.createElement("a");
         a.href = url;
         a.download = "tour.json";
+        a.style.display = "none";
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        a.remove();
+        // Revoking synchronously can cancel the download in Chromium/WebKit.
+        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
       }),
     );
     this.panel.appendChild(exportRow);
 
     const hint = this.el(
       "div",
-      "Drag a hotspot marker to move it along surfaces.",
+      "Drag a hotspot or link marker to move it along surfaces.",
       "margin-top:8px;color:#888",
     );
     this.panel.appendChild(hint);
@@ -263,18 +272,58 @@ export class AuthorMode {
 
   private onPointerDown = (event: PointerEvent): void => {
     this.dragRaycaster.setFromCamera(this.pointerNdc(event), this.ctx.camera);
+    const currentNode = this.ctx.navigation.getCurrentNodeId();
     for (const hotspot of this.ctx.config.hotspots) {
+      if (hotspot.node !== undefined && hotspot.node !== currentNode) continue;
       const sprite = this.findSprite(hotspot);
-      if (!sprite) continue;
+      if (!sprite?.visible) continue;
       const hits = this.dragRaycaster.intersectObject(sprite, false);
       if (hits.length > 0) {
-        this.dragging = hotspot;
-        this.ctx.controls.enabled = false;
-        event.stopPropagation();
-        break;
+        this.startDrag(event, { kind: "hotspot", hotspot });
+        return;
       }
     }
+
+    const link = this.linkNearPointer(event, currentNode);
+    if (link) {
+      this.startDrag(event, { kind: "link", handle: link });
+    }
   };
+
+  /**
+   * A horizontal floor disc becomes nearly edge-on toward the horizon, making
+   * triangle raycasts frustratingly precise. Author mode therefore gives
+   * visible link markers a small screen-space grab radius.
+   */
+  private linkNearPointer(
+    event: PointerEvent,
+    currentNode: string | null,
+  ): AuthorLinkHandle | null {
+    const rect = this.ctx.canvas.getBoundingClientRect();
+    this.ctx.camera.updateMatrixWorld();
+    let closest: { handle: AuthorLinkHandle; distance: number } | null = null;
+    for (const handle of this.ctx.navigation.getAuthorLinkHandles()) {
+      if (handle.fromNodeId !== currentNode || !handle.mesh.visible) continue;
+      handle.mesh.updateWorldMatrix(true, false);
+      const point = handle.mesh.getWorldPosition(new Vector3()).project(this.ctx.camera);
+      if (point.z < -1 || point.z > 1) continue;
+      const x = rect.left + ((point.x + 1) / 2) * rect.width;
+      const y = rect.top + ((1 - point.y) / 2) * rect.height;
+      const distance = Math.hypot(event.clientX - x, event.clientY - y);
+      if (distance <= 32 && (!closest || distance < closest.distance)) {
+        closest = { handle, distance };
+      }
+    }
+    return closest?.handle ?? null;
+  }
+
+  private startDrag(event: PointerEvent, target: DragTarget): void {
+    this.dragging = target;
+    this.ctx.controls.enabled = false;
+    this.ctx.canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   private findSprite(hotspot: HotspotConfig): Object3D | null {
     return this.ctx.hotspots.getSprite(hotspot.id);
@@ -292,16 +341,30 @@ export class AuthorMode {
         Math.round(hit.point.y * 1000) / 1000,
         Math.round(hit.point.z * 1000) / 1000,
       ];
-      this.dragging.position = position;
-      this.ctx.hotspots.updatePosition(this.dragging.id, position);
+      if (this.dragging.kind === "hotspot") {
+        this.dragging.hotspot.position = position;
+        this.ctx.hotspots.updatePosition(this.dragging.hotspot.id, position);
+      } else {
+        this.ctx.navigation.updateLinkPosition(this.dragging.handle.link, position);
+      }
     }
   };
 
-  private onPointerUp = (): void => {
+  private onPointerUp = (event: PointerEvent): void => {
     if (!this.dragging) return;
-    this.lastHitText.textContent = `moved ${this.dragging.id} @ ${JSON.stringify(this.dragging.position)}`;
+    const target = this.dragging;
+    const label =
+      target.kind === "hotspot"
+        ? target.hotspot.id
+        : `link ${target.handle.fromNodeId} → ${target.handle.link.to}`;
+    const position =
+      target.kind === "hotspot" ? target.hotspot.position : target.handle.link.position;
+    this.lastHitText.textContent = `moved ${label} @ ${JSON.stringify(position)}`;
     this.dragging = null;
     this.ctx.controls.enabled = true;
+    if (this.ctx.canvas.hasPointerCapture(event.pointerId)) {
+      this.ctx.canvas.releasePointerCapture(event.pointerId);
+    }
   };
 
   // --- Wireframe -------------------------------------------------------------
