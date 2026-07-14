@@ -3,6 +3,7 @@ import {
   type HotspotConfig,
   type TourConfigInput,
   type TourEngineOptions,
+  type TourViewMode,
 } from "@meshtour/core";
 import {
   useCallback,
@@ -28,12 +29,17 @@ export interface TourProps {
   authorMode?: boolean;
   className?: string;
   style?: CSSProperties;
-  onReady?: () => void;
+  onReady?: (engine: TourEngine) => void;
   onError?: (error: Error) => void;
   onNodeChange?: (nodeId: string, from: string | null) => void;
+  onTransitionStart?: (from: string, to: string) => void;
+  onTransitionEnd?: (from: string, to: string) => void;
   onHotspotClick?: (hotspot: HotspotConfig) => void;
   onInteractableHover?: (id: string | null) => void;
   onInteractableClick?: (id: string) => void;
+  onVariantChange?: (configurableId: string, variantId: string) => void;
+  onViewModeChange?: (mode: TourViewMode) => void;
+  onMeasurementsChange?: (visible: boolean) => void;
   /**
    * Custom React UI for hotspot popups. When provided, the engine's built-in
    * HTML popups are disabled and this renders anchored to the hotspot instead.
@@ -81,11 +87,15 @@ export function Tour(props: TourProps): ReactNode {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<TourViewMode>("panorama");
+  const [measurementsVisible, setMeasurementsVisible] = useState(false);
   const [popup, setPopup] = useState<ActivePopup | null>(null);
 
   // Keep latest callbacks in a ref so engine listeners never need rebinding.
   const callbacksRef = useRef(props);
-  callbacksRef.current = props;
+  useEffect(() => {
+    callbacksRef.current = props;
+  }, [props]);
 
   const hasCustomPopups = Boolean(hotspotRenderer);
 
@@ -104,7 +114,7 @@ export function Tour(props: TourProps): ReactNode {
 
     tourEngine.on("ready", () => {
       setReady(true);
-      callbacksRef.current.onReady?.();
+      callbacksRef.current.onReady?.(tourEngine);
     });
     tourEngine.on("error", ({ error: err }) => {
       setError(err);
@@ -114,6 +124,12 @@ export function Tour(props: TourProps): ReactNode {
       setCurrentNode(to);
       setPopup(null);
       callbacksRef.current.onNodeChange?.(to, from);
+    });
+    tourEngine.on("transitionstart", ({ from, to }) => {
+      callbacksRef.current.onTransitionStart?.(from, to);
+    });
+    tourEngine.on("transitionend", ({ from, to }) => {
+      callbacksRef.current.onTransitionEnd?.(from, to);
     });
     tourEngine.on("hotspotclick", ({ hotspot }) => {
       callbacksRef.current.onHotspotClick?.(hotspot);
@@ -128,6 +144,17 @@ export function Tour(props: TourProps): ReactNode {
     tourEngine.on("interactableclick", ({ id }) => {
       callbacksRef.current.onInteractableClick?.(id);
     });
+    tourEngine.on("variantchange", ({ configurableId, variantId }) => {
+      callbacksRef.current.onVariantChange?.(configurableId, variantId);
+    });
+    tourEngine.on("viewmodechange", ({ mode }) => {
+      setViewMode(mode);
+      callbacksRef.current.onViewModeChange?.(mode);
+    });
+    tourEngine.on("measurementschange", ({ visible }) => {
+      setMeasurementsVisible(visible);
+      callbacksRef.current.onMeasurementsChange?.(visible);
+    });
 
     setEngine(tourEngine);
     tourEngine.start().catch(() => {
@@ -140,6 +167,8 @@ export function Tour(props: TourProps): ReactNode {
       setReady(false);
       setError(null);
       setCurrentNode(null);
+      setViewMode("panorama");
+      setMeasurementsVisible(false);
       setPopup(null);
     };
     // Intentionally not depending on engineOptions/authorMode: options are
@@ -152,27 +181,28 @@ export function Tour(props: TourProps): ReactNode {
   }, [engine, authorMode]);
 
   // Track the active popup's screen anchor while the camera moves.
+  const popupHotspot = popup?.hotspot;
   useEffect(() => {
-    if (!engine || !popup) return;
+    if (!engine || !popupHotspot) return;
     let frame = 0;
     const tick = () => {
       frame = requestAnimationFrame(tick);
       setPopup((current) => {
         if (!current) return current;
-        const { x, y, visible } = engine.worldToScreen(current.hotspot.position);
+        const { x, y, visible } = engine.worldToScreen(popupHotspot.position);
         if (x === current.x && y === current.y && visible === current.visible) return current;
         return { ...current, x, y, visible };
       });
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [engine, popup?.hotspot]);
+  }, [engine, popupHotspot]);
 
   const closePopup = useCallback(() => setPopup(null), []);
 
   const contextValue = useMemo(
-    () => ({ engine, ready, currentNode }),
-    [engine, ready, currentNode],
+    () => ({ engine, ready, currentNode, viewMode, measurementsVisible }),
+    [engine, ready, currentNode, viewMode, measurementsVisible],
   );
 
   return (

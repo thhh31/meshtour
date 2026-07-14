@@ -2,6 +2,8 @@ export { Tour } from "./Tour";
 export type { TourProps, HotspotRendererHelpers } from "./Tour";
 export { useTour } from "./useTour";
 export type { UseTourResult } from "./useTour";
+export { TourSpatialControls } from "./TourSpatialControls";
+export type { TourSpatialControlsProps } from "./TourSpatialControls";
 export { TourContext } from "./context";
 export type { TourContextValue } from "./context";
 

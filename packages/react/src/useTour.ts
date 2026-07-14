@@ -1,4 +1,4 @@
-import type { TourEngine, TransitionOptions } from "@meshtour/core";
+import type { TourEngine, TourViewMode, TransitionOptions } from "@meshtour/core";
 import { useCallback, useContext } from "react";
 import { TourContext } from "./context";
 
@@ -9,15 +9,19 @@ export interface UseTourResult {
   ready: boolean;
   /** Id of the node the user is currently standing at. */
   currentNode: string | null;
+  viewMode: TourViewMode;
+  measurementsVisible: boolean;
   goToNode: (nodeId: string, options?: TransitionOptions) => Promise<void>;
   lookAt: (target: [number, number, number]) => void;
   getCurrentNode: () => string | null;
   setHotspotsVisible: (visible: boolean) => void;
+  setViewMode: (mode: TourViewMode) => void;
+  setMeasurementsVisible: (visible: boolean) => void;
 }
 
 /** Imperative tour API. Must be used inside `<Tour>` children. */
 export function useTour(): UseTourResult {
-  const { engine, ready, currentNode } = useContext(TourContext);
+  const { engine, ready, currentNode, viewMode, measurementsVisible } = useContext(TourContext);
 
   const goToNode = useCallback(
     async (nodeId: string, options?: TransitionOptions) => {
@@ -39,5 +43,24 @@ export function useTour(): UseTourResult {
     [engine],
   );
 
-  return { engine, ready, currentNode, goToNode, lookAt, getCurrentNode, setHotspotsVisible };
+  const setViewMode = useCallback((mode: TourViewMode) => engine?.setViewMode(mode), [engine]);
+
+  const setMeasurementsVisible = useCallback(
+    (visible: boolean) => engine?.setMeasurementsVisible(visible),
+    [engine],
+  );
+
+  return {
+    engine,
+    ready,
+    currentNode,
+    viewMode,
+    measurementsVisible,
+    goToNode,
+    lookAt,
+    getCurrentNode,
+    setHotspotsVisible,
+    setViewMode,
+    setMeasurementsVisible,
+  };
 }
