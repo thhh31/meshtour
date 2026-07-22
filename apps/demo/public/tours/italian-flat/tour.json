@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "name": "Italian Flat Demo",
+  "units": "meters",
+  "assets": {
+    "basePath": "./tours/italian-flat/",
+    "mesh": {
+      "url": "mesh/apartment.glb?v=7",
+      "draco": true
+    }
+  },
+  "rendering": {
+    "previewSuffix": "_1k.jpg",
+    "fullSuffix": "_4k.ktx2",
+    "background": "#0b0b0e",
+    "transition": "walk"
+  },
+  "interactables": {
+    "namePrefix": "int_",
+    "highlight": {
+      "color": "#fff4dc",
+      "opacity": 0
+    }
+  },
+  "spatial": {
+    "overview": {
+      "bounds": {
+        "min": [0, -9.899],
+        "max": [6.98, 0]
+      },
+      "floorY": 0,
+      "ceiling": {
+        "y": 2.7,
+        "thickness": 0.08,
+        "bounds": {
+          "min": [0, -9.899],
+          "max": [6.98, 0]
+        }
+      },
+      "topView": {
+        "url": "overview/top.jpg",
+        "bounds": {
+          "min": [0, -9.899],
+          "max": [6.98, 0]
+        }
+      }
+    },
+    "measurementColor": "#ffffff",
+    "measurements": [
+      {
+        "id": "apartment",
+        "label": "Apartment",
+        "bounds": {
+          "min": [0, 0, -9.899],
+          "max": [6.98, 2.7, 0]
+        },
+        "axes": ["width", "depth"],
+        "defaultVisible": true,
+        "color": "#58d3f7",
+        "alwaysOnTop": true,
+        "offset": 0.28
+      },
+      {
+        "id": "sofa",
+        "label": "Sofa",
+        "target": "int_sofa",
+        "axes": ["width", "depth", "height"]
+      },
+      {
+        "id": "dining-table",
+        "label": "Dining table",
+        "target": "int_dining_table",
+        "axes": ["width", "depth", "height"]
+      },
+      {
+        "id": "lounge-chair",
+        "label": "Lounge chair",
+        "target": "int_lounge_chair",
+        "axes": ["width", "depth", "height"]
+      },
+      {
+        "id": "pouf",
+        "label": "Pouf",
+        "target": "int_pouf",
+        "axes": ["width", "depth", "height"]
+      }
+    ]
+  },
+  "configurables": [
+    {
+      "id": "sofa-finish",
+      "label": "Sofa finish",
+      "interactable": "sofa",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original grey",
+          "swatch": "#57504d"
+        },
+        {
+          "id": "terracotta",
+          "label": "Terracotta",
+          "swatch": "#a85f43",
+          "layers": {
+            "living": "layers/sofa/terracotta/living_4k.png",
+            "lounge": "layers/sofa/terracotta/lounge_4k.png"
+          }
+        },
+        {
+          "id": "ivory-boucle",
+          "label": "Ivory bouclé",
+          "swatch": "#e7dcc9",
+          "layers": {
+            "living": "layers/sofa/ivory-boucle/living_4k.png",
+            "lounge": "layers/sofa/ivory-boucle/lounge_4k.png"
+          }
+        },
+        {
+          "id": "forest-velvet",
+          "label": "Forest velvet",
+          "swatch": "#315b3b",
+          "layers": {
+            "living": "layers/sofa/forest-velvet/living_4k.png",
+            "lounge": "layers/sofa/forest-velvet/lounge_4k.png"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rug-finish",
+      "label": "Rug finish",
+      "interactable": "rug",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original grey",
+          "swatch": "#777370"
+        },
+        {
+          "id": "sand-wool",
+          "label": "Sand wool",
+          "swatch": "#bea47b",
+          "layers": {
+            "living": "layers/rug/sand-wool/living_4k.png",
+            "lounge": "layers/rug/sand-wool/lounge_4k.png"
+          }
+        },
+        {
+          "id": "sage-weave",
+          "label": "Sage weave",
+          "swatch": "#789071",
+          "layers": {
+            "living": "layers/rug/sage-weave/living_4k.png",
+            "lounge": "layers/rug/sage-weave/lounge_4k.png"
+          }
+        },
+        {
+          "id": "charcoal-geometric",
+          "label": "Charcoal geometric",
+          "swatch": "#41464d",
+          "layers": {
+            "living": "layers/rug/charcoal-geometric/living_4k.png",
+            "lounge": "layers/rug/charcoal-geometric/lounge_4k.png"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lounge-chair-style",
+      "label": "Lounge chair style",
+      "interactable": "lounge_chair",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original",
+          "swatch": "#4d4645"
+        },
+        {
+          "id": "moss-velvet",
+          "label": "Moss velvet",
+          "swatch": "#486347",
+          "layers": {
+            "living": "layers/chair/moss-velvet/living_4k.png",
+            "lounge": "layers/chair/moss-velvet/lounge_4k.png"
+          }
+        },
+        {
+          "id": "cognac-leather",
+          "label": "Cognac leather",
+          "swatch": "#a45f2d",
+          "layers": {
+            "living": "layers/chair/cognac-leather/living_4k.png",
+            "lounge": "layers/chair/cognac-leather/lounge_4k.png"
+          }
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "to": "kitchen",
+      "position": [3.688, 0.0, -3.142],
+      "hideAtTarget": true
+    },
+    {
+      "to": "living",
+      "position": [3.4, 0.0, -5.35],
+      "hideAtTarget": true
+    },
+    {
+      "to": "lounge",
+      "position": [3.932, 0.0, -9.193],
+      "hideAtTarget": true
+    }
+  ],
+  "nodes": [
+    {
+      "id": "kitchen",
+      "name": "Kitchen & Dining",
+      "position": [4.1, 1.62, -3.2],
+      "panorama": {
+        "url": "pano/kitchen",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": 2.04,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "living",
+      "name": "Living Room",
+      "position": [3.4, 1.62, -5.35],
+      "panorama": {
+        "url": "pano/living",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": -0.295,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "lounge",
+      "name": "Library Lounge",
+      "position": [3.35, 1.62, -8.75],
+      "panorama": {
+        "url": "pano/lounge",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": -2.075,
+        "pitch": -0.03
+      }
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "sofa_materials",
+      "position": [2.45, 0.618, -6.872],
+      "type": "custom",
+      "title": "Sofa finish",
+      "payload": {
+        "configurableId": "sofa-finish"
+      }
+    },
+    {
+      "id": "rug_materials",
+      "position": [3.384, 0.003, -7.466],
+      "type": "custom",
+      "title": "Rug finish",
+      "payload": {
+        "configurableId": "rug-finish"
+      }
+    },
+    {
+      "id": "chair_materials",
+      "position": [4.06, 0.37, -6.565],
+      "type": "custom",
+      "title": "Lounge chair style",
+      "payload": {
+        "configurableId": "lounge-chair-style"
+      }
+    },
+    {
+      "id": "kitchen_finishes",
+      "node": "kitchen",
+      "position": [1.823, 0.835, -0.494],
+      "type": "info",
+      "title": "Kitchen finishes",
+      "body": "Scene markers respect wall occlusion; the persistent point bar remains available at every angle."
+    }
+  ],
+  "start": "living"
+}
