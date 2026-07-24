@@ -101,6 +101,7 @@ Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug ove
 ```
 packages/core       @meshtour/core — the engine
 packages/react      @meshtour/react — React bindings
+apps/demo           React demo app (pnpm --filter @meshtour/demo dev)
 assets-pipeline     Blender export guide
 docs                CONFIG.md and friends
 ```

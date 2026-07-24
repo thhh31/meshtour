@@ -15,6 +15,43 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/demo:
+    dependencies:
+      '@meshtour/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@meshtour/react':
+        specifier: workspace:*
+        version: link:../../packages/react
+      react:
+        specifier: ^19.2.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.7(react@19.2.7)
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: ^0.184.0
+        version: 0.184.1
+      '@vitejs/plugin-react':
+        specifier: ^5.0.0
+        version: 5.2.0(vite@7.3.5)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.5
+        version: 7.3.5
+
   packages/core:
     dependencies:
       three-mesh-bvh:

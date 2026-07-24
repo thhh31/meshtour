@@ -9,6 +9,7 @@ corepack enable pnpm   # or: npm i -g pnpm
 pnpm install
 pnpm build             # builds @meshtour/core and @meshtour/react
 pnpm test
+pnpm --filter @meshtour/demo dev         # React demo
 ```
 
 Both apps generate their own assets at runtime (procedural apartment + baked panoramas), so there is nothing to download.
