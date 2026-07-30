@@ -1,0 +1,138 @@
+import { expect, test } from "@playwright/test";
+
+const FAST_4G = {
+  offline: false,
+  latency: 40,
+  downloadThroughput: (4 * 1024 * 1024) / 8,
+  uploadThroughput: (3 * 1024 * 1024) / 8,
+};
+
+test("becomes interactive within two seconds on emulated fast 4G", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-chromium", "The cold-start budget targets phones");
+
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Network.enable");
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+  await cdp.send("Network.emulateNetworkConditions", FAST_4G);
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => performance.getEntriesByName("meshtour-ready").length > 0);
+  const interactiveMs = await page.evaluate(
+    () => performance.getEntriesByName("meshtour-ready")[0]!.startTime,
+  );
+  const resources = await page.evaluate(() =>
+    performance
+      .getEntriesByType("resource")
+      .map((entry) => {
+        const timing = entry as PerformanceResourceTiming;
+        return {
+          path: new URL(entry.name).pathname,
+          startTime: entry.startTime,
+          duration: entry.duration,
+          transferSize: timing.transferSize,
+          encodedBodySize: timing.encodedBodySize,
+        };
+      })
+      .sort((a, b) => a.startTime - b.startTime),
+  );
+  console.log(`mobile-chromium: interactive in ${interactiveMs.toFixed(0)} ms on emulated fast 4G`);
+  console.log(JSON.stringify(resources, null, 2));
+
+  await testInfo.attach("cold-start.json", {
+    body: JSON.stringify({ profile: FAST_4G, interactiveMs, resources }, null, 2),
+    contentType: "application/json",
+  });
+  expect(interactiveMs).toBeLessThan(2_000);
+});
+
+test("keeps transitions above the frame-rate budget", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await page.goto("/?tour=italian-flat");
+  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
+    "aria-current",
+    "location",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance
+          .getEntriesByType("resource")
+          .some((entry) => entry.name.endsWith("/pano/lounge_4k.ktx2")),
+      ),
+    )
+    .toBe(true);
+
+  await page.evaluate(() => {
+    performance.clearMarks("meshtour-transition-start");
+    performance.clearMarks("meshtour-transition-end");
+  });
+  const frameSamplesPromise = page.evaluate(
+    () =>
+      new Promise<number[]>((resolve) => {
+        const samples: number[] = [];
+        const sample = (now: number) => {
+          const started = performance.getEntriesByName("meshtour-transition-start").length > 0;
+          const ended = performance.getEntriesByName("meshtour-transition-end").length > 0;
+          if (started) samples.push(now);
+          if (started && ended) resolve(samples);
+          else requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
+  await page.getByRole("button", { name: "Library Lounge" }).click();
+  await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
+    "aria-current",
+    "location",
+  );
+  const samples = await frameSamplesPromise;
+  const elapsed = samples.at(-1)! - samples[0]!;
+  const fps = ((samples.length - 1) * 1_000) / elapsed;
+  const frameTimes = samples.slice(1).map((sample, index) => sample - samples[index]!);
+  const sortedFrameTimes = [...frameTimes].sort((a, b) => a - b);
+  const p95FrameMs = sortedFrameTimes[Math.floor(sortedFrameTimes.length * 0.95)] ?? Infinity;
+  const minimumFps = testInfo.project.name === "mobile-chromium" ? 30 : 55;
+  const renderer = await page.evaluate(() => {
+    const gl = document.querySelector("canvas")?.getContext("webgl2");
+    if (!gl) return "WebGL2 unavailable";
+    const extension = gl.getExtension("WEBGL_debug_renderer_info");
+    return extension ? String(gl.getParameter(extension.UNMASKED_RENDERER_WEBGL)) : "masked";
+  });
+
+  console.log(
+    `${testInfo.project.name}: ${fps.toFixed(1)} fps, p95 ${p95FrameMs.toFixed(1)} ms, ${renderer}`,
+  );
+
+  await testInfo.attach("transition-performance.json", {
+    body: JSON.stringify(
+      { fps, p95FrameMs, frames: samples.length, minimumFps, renderer },
+      null,
+      2,
+    ),
+    contentType: "application/json",
+  });
+  const softwareRenderer = /swiftshader|llvmpipe|software/i.test(renderer);
+  if (softwareRenderer) {
+    testInfo.annotations.push({
+      type: "performance",
+      description: `Frame budget not enforced on software WebGL renderer: ${renderer}`,
+    });
+    expect(samples.length).toBeGreaterThan(2);
+  } else {
+    expect(fps).toBeGreaterThanOrEqual(minimumFps);
+    expect(p95FrameMs).toBeLessThanOrEqual(35);
+  }
+
+  // Exercise every configured edge in both directions after the measured run.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const room of ["Living Room", "Kitchen & Dining", "Living Room", "Library Lounge"]) {
+    await page.getByRole("button", { name: room }).click();
+    await expect(page.getByRole("button", { name: room })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+  }
+});

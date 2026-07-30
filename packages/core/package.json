@@ -38,11 +38,11 @@
     "three": ">=0.160.0"
   },
   "dependencies": {
+    "@types/three": "^0.184.0",
     "three-mesh-bvh": "^0.9.10",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/three": "^0.184.0",
     "three": "^0.184.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
