@@ -9,6 +9,10 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build",
     "build:apps": "pnpm -r --filter './apps/*' build",
+    "sizecheck": "node scripts/check-core-bundle.mjs",
+    "assets:manifest": "node scripts/update-italian-flat-manifest.mjs",
+    "assets:verify": "node scripts/verify-demo-assets.mjs",
+    "packages:verify": "node scripts/verify-package-consumers.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:e2e": "playwright test",
