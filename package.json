@@ -13,6 +13,7 @@
     "assets:manifest": "node scripts/update-italian-flat-manifest.mjs",
     "assets:verify": "node scripts/verify-demo-assets.mjs",
     "packages:verify": "node scripts/verify-package-consumers.mjs",
+    "demo:record": "node scripts/record-demo.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:e2e": "playwright test",
