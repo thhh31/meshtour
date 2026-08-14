@@ -17,10 +17,15 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

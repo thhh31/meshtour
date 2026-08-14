@@ -21,7 +21,10 @@
     "lint": "pnpm lint:eslint && pnpm lint:format",
     "lint:eslint": "eslint . --max-warnings 0",
     "lint:format": "prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.0",

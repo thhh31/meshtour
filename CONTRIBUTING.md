@@ -12,7 +12,7 @@ pnpm test
 pnpm --filter @meshtour/demo dev         # React demo
 ```
 
-Both apps generate their own assets at runtime (procedural apartment + baked panoramas), so there is nothing to download.
+The demo serves the checked-in Italian Flat web bundle; the large original `.blend` and lossless render masters stay outside Git and can be regenerated with the scripts under `assets-pipeline/scripts`.
 
 ## Project shape
 
@@ -24,7 +24,9 @@ Both apps generate their own assets at runtime (procedural apartment + baked pan
 
 - TypeScript strict; `pnpm typecheck` must pass.
 - `pnpm test` (Vitest) must pass; new behavior in config validation, projection math, or the event flow needs tests.
-- `pnpm lint` (Prettier check) before pushing; `pnpm format` fixes everything.
+- `pnpm test:e2e` must pass for viewer, demo UI, navigation, or asset-loading changes. Update visual baselines only after inspecting the diff.
+- `pnpm lint` (ESLint + Prettier) before pushing; `pnpm format` fixes formatting.
+- Public API/runtime changes need a `pnpm changeset` entry.
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`…).
 
 ## Performance budget (don't regress these)
