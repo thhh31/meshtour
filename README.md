@@ -2,7 +2,11 @@
 
 **Open-source mesh-backed virtual tours for the web.** Photorealistic equirectangular panoramas projected onto an invisible low-poly proxy mesh — so your tour knows what the cursor is pointing at, hides hotspots behind walls, and _walks_ between viewpoints with a parallax-correct transition instead of a crossfade.
 
-> Status: Stage 1 (v0.1). Core engine, React bindings, author mode, and a self-contained demo. Config schema v1.
+> Status: Stage 1 (v0.1 release candidate). Core engine, React bindings, author mode, and a production-asset demo. Config schema v1.
+
+![MeshTour transition between viewpoints](docs/media/transition-poster.png)
+
+[Watch the 14-second walking-transition demo](docs/media/meshtour-transition.webm)
 
 ## Why a mesh behind the image?
 
@@ -11,6 +15,7 @@ Flat panorama viewers (Pannellum, Marzipano, krpano, Kuula) display a sphere of 
 - **Object-aware cursor** — hover a table, wall, or apartment unit to highlight it, change the cursor, or show a tooltip.
 - **Occlusion-aware hotspots** — a hotspot behind a wall is hidden, exactly as it should be.
 - **Walking transitions** — the camera moves through real 3D space between viewpoints while panoramas re-project onto the mesh. This is the signature feature.
+- **Pre-rendered furniture variants** — transparent per-node panorama layers can replace an interactable's finish while retaining offline-rendered lighting and transition alignment.
 
 The closest commercial analogue is Matterport, but MeshTour's primary workflow is **same-source**: panoramas _and_ proxy mesh are exported from one 3D model (Blender, 3ds Max…), so alignment is exact and free. That makes it uniquely suited to **pre-construction real estate and archviz** — spaces that don't physically exist yet and cannot be scanned.
 
@@ -34,6 +39,7 @@ export function Apartment() {
   return (
     <Tour
       config="/tours/apartment/tour.json"
+      style={{ height: "100dvh" }}
       onNodeChange={(id) => console.log("now at", id)}
       onHotspotClick={(hotspot) => console.log(hotspot.title)}
     />
@@ -81,9 +87,14 @@ A tour is one JSON file — the full format is documented in [CONFIG.md](docs/CO
 
 The Blender same-source workflow (panorama cameras + decimated proxy mesh + KTX2 compression) is documented step-by-step in [assets-pipeline/BLENDER.md](assets-pipeline/BLENDER.md).
 
+The bundled demo uses the freely licensed **Italian Flat** scene by Flavio Della Tommasa. Its three repositioned 4K panoramas, detailed contour-accurate Draco proxy, progressive KTX2 delivery, attribution, and reproducible build notes live under `apps/demo/public/tours/italian-flat/`; see [the asset runbook](docs/FIRST_DEMO_ASSETS.md).
+
 ## Author mode
 
-Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug overlay: toggle the proxy wireframe to verify alignment, click to place hotspots and links, drag hotspots along surfaces, nudge per-panorama yaw, and copy/download the updated JSON. No backend, no persistence — paste the JSON into your tour file.
+Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug overlay: toggle the proxy wireframe to verify alignment, click to place hotspots and links, drag either marker along surfaces, nudge per-panorama yaw, and copy/download the updated JSON. No backend, no persistence — paste the JSON into your tour file.
+
+The bundled demo enables this panel when opened with `?author=1`, making the
+entire authoring workflow inspectable without changing source code.
 
 ## Feature comparison
 
@@ -101,10 +112,12 @@ Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug ove
 ```
 packages/core       @meshtour/core — the engine
 packages/react      @meshtour/react — React bindings
-apps/demo           React demo app (pnpm --filter @meshtour/demo dev)
-assets-pipeline     Blender export guide
+apps/demo           production-asset React demo (pnpm --filter @meshtour/demo dev)
+assets-pipeline     Blender export guide and reproducible reference scripts
 docs                CONFIG.md and friends
 ```
+
+The demo serves checked-in, optimized assets produced from the licensed Blender scene; Draco and Basis decoders are self-hosted, so it has no runtime CDN dependency.
 
 ## Development
 
@@ -113,19 +126,29 @@ pnpm install
 pnpm build        # build the publishable packages
 pnpm test         # unit tests (config schema, projection math, events)
 pnpm typecheck
+pnpm test:e2e     # Chromium flows/visuals + Firefox/WebKit compatibility
 ```
+
+Package versioning uses Changesets. Maintainer setup and first-publish checks
+are documented in [RELEASING.md](docs/RELEASING.md). A developer taking over
+the project should start with [DEVELOPER_HANDOFF.md](docs/DEVELOPER_HANDOFF.md).
+Reproducible cold-start and transition measurements are in
+[PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Known rendering artifacts (and what we do about them)
 
-- **Occlusion ghosting during transitions**: geometry visible from B but not from A briefly shows stretched texels. Mitigated by biasing the blend to complete at ~78% of the travel and by authoring guidance (transition between adjacent nodes with mostly-shared visibility). Per-fragment visibility testing is on the roadmap.
+- **Sparse transition coverage**: walk mode uses radial depth cubemaps to stop a panorama from painting surfaces hidden from its capture point. The bundled Italian Flat demo now uses this mode after calibrating every panorama to `−π/2`; if both viewpoints lack usable proxy coverage, use `rendering.transition: "fade"`.
 - **Proxy imprecision**: where the low-poly mesh deviates from the rendered geometry, texels swim slightly during movement. Keep walls/floors/large furniture reasonably faithful when decimating.
 - **Equirect seam/poles**: handled with derivative-aware dual sampling in the shader.
+
+The staged engineering plan for eliminating the remaining walk artifacts is in
+[TRANSITION_QUALITY.md](docs/TRANSITION_QUALITY.md).
 
 ## Roadmap
 
 - WebXR / headset support
 - Calibration tooling for photographed panoramas of real spaces
-- Per-fragment occlusion (depth from panorama centers)
+- Offline depth-map import for scan/photo workflows
 - Dollhouse view, minimap, floor plans
 - Stage 2: hosted visual editor producing this same config format
 
