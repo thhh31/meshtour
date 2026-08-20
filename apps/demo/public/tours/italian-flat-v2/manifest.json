@@ -1,0 +1,167 @@
+{
+  "version": 2,
+  "name": "Italian Flat v2",
+  "generatedAt": "2026-08-20T13:21:19.256Z",
+  "source": {
+    "tour": "../italian-flat",
+    "proxy": "../italian-flat/mesh/apartment.glb",
+    "proxySha256": "0d7c3b6535c464e0913fcd5010b632e2147d22bfa0640437dc9f3f91bcf519ea"
+  },
+  "transitionVisibility": {
+    "objects": 32,
+    "excludedObjects": [
+      "int_rug"
+    ],
+    "bytes": 283952,
+    "sha256": "bd30e0d8bcad6cfceec3bb6febfe87adbe97d006024895cdde03e7e5e6cccdcd"
+  },
+  "capabilities": {
+    "dedicatedVisibilityMesh": true,
+    "directedPaths": true,
+    "panoramaCorrectionMetadata": true,
+    "offlineRadialDepth": false,
+    "disocclusionBridge": false
+  },
+  "files": [
+    {
+      "path": "ATTRIBUTION.md",
+      "bytes": 498,
+      "sha256": "f20c4caf8a57934ce4930c2985a1205b39bc8a5f4c5412af9b55ff866fa71cf1"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1498,
+      "sha256": "ee31d304e5629f98f9ef0f4bb9995d0d652b38b09de8f0464bd37c5c3c03fe47"
+    },
+    {
+      "path": "layers/chair/cognac-leather/living_4k.png",
+      "bytes": 1629576,
+      "sha256": "3b6a8eec78f195cf2c0d61242b4e1d69ddce5357c9ec2b578696673884ebb1bf"
+    },
+    {
+      "path": "layers/chair/cognac-leather/lounge_4k.png",
+      "bytes": 1546080,
+      "sha256": "fb529e16d7a8f4ff0002661772bbce412ad0459f586d9a5ab8ae11bd8e7e6926"
+    },
+    {
+      "path": "layers/chair/moss-velvet/living_4k.png",
+      "bytes": 1623808,
+      "sha256": "f791f329cdf277e750250942d67da7c1cd99504b4dee79216406446d04e006c7"
+    },
+    {
+      "path": "layers/chair/moss-velvet/lounge_4k.png",
+      "bytes": 1541970,
+      "sha256": "fec475156a9b7e8b527426e479b763bdd85f576960722fba3c57fc25ebd400d6"
+    },
+    {
+      "path": "layers/rug/charcoal-geometric/living_4k.png",
+      "bytes": 2051147,
+      "sha256": "f4aed1c8f8169c978a8c0ec91403dd3b506e25ee62e2157b2ea8d3b180dc2fbc"
+    },
+    {
+      "path": "layers/rug/charcoal-geometric/lounge_4k.png",
+      "bytes": 2416852,
+      "sha256": "66f0fcdd7aa231e6410fe0c33589b7debd215dc14b91ac8194013320a9ec40bb"
+    },
+    {
+      "path": "layers/rug/sage-weave/living_4k.png",
+      "bytes": 2132542,
+      "sha256": "deb4a497f97cf63c969a491a34548909903d991659e44353eefc76cf421ac5d1"
+    },
+    {
+      "path": "layers/rug/sage-weave/lounge_4k.png",
+      "bytes": 2556888,
+      "sha256": "dffa70d794c8c88c1c7d2a562a1023c9d99ceba426af90e72a47d43460a3686e"
+    },
+    {
+      "path": "layers/rug/sand-wool/living_4k.png",
+      "bytes": 2200292,
+      "sha256": "6f92321498af3992723d857f834d220413250caab5bb4f8a10a0325134c4e887"
+    },
+    {
+      "path": "layers/rug/sand-wool/lounge_4k.png",
+      "bytes": 2652123,
+      "sha256": "97b7f36a6e062ad74972f42fcf44c22aff3504c234974140b782c44c2e77ec8a"
+    },
+    {
+      "path": "layers/sofa/forest-velvet/living_4k.png",
+      "bytes": 1829101,
+      "sha256": "0c39aa64c28e02a5422f7e85c19139f6deb85d5ba9b6d4184e0da5f452301359"
+    },
+    {
+      "path": "layers/sofa/forest-velvet/lounge_4k.png",
+      "bytes": 1871084,
+      "sha256": "0ef468dbe6eafb9d87c1a0da2a50a0bda64c6576e787938cb0e2d7ef1d53e0d4"
+    },
+    {
+      "path": "layers/sofa/ivory-boucle/living_4k.png",
+      "bytes": 1835196,
+      "sha256": "1f8a17a83242487e085c575449f7cb2a8d7443d6e9096fcd7ac52db5301edeb7"
+    },
+    {
+      "path": "layers/sofa/ivory-boucle/lounge_4k.png",
+      "bytes": 1879592,
+      "sha256": "1fc36c96601b3f9401c6d3a4b086b676c98cc0d9a06f44538aead2c755e4e46e"
+    },
+    {
+      "path": "layers/sofa/terracotta/living_4k.png",
+      "bytes": 1836725,
+      "sha256": "3acc2958d28f39015f439e409ba69cfe1b387ddaed6ad74eaa45f62115d496d1"
+    },
+    {
+      "path": "layers/sofa/terracotta/lounge_4k.png",
+      "bytes": 1883851,
+      "sha256": "65c8c1c990daef56a6dc6d2720fd4c1d522786a2ec54530115157ca1abdd9560"
+    },
+    {
+      "path": "mesh/apartment.glb",
+      "bytes": 283796,
+      "sha256": "0d7c3b6535c464e0913fcd5010b632e2147d22bfa0640437dc9f3f91bcf519ea"
+    },
+    {
+      "path": "mesh/transition-visibility.glb",
+      "bytes": 283952,
+      "sha256": "bd30e0d8bcad6cfceec3bb6febfe87adbe97d006024895cdde03e7e5e6cccdcd"
+    },
+    {
+      "path": "overview/top.jpg",
+      "bytes": 712250,
+      "sha256": "bea4f62e493a16c7c379e75663eefb3fc29ac7ee1b309d95432a3a628a015f85"
+    },
+    {
+      "path": "pano/kitchen_1k.jpg",
+      "bytes": 86819,
+      "sha256": "b9e390a692603c016712b33f4654aafb13c4aad8fc4f326898753786b7b5fc05"
+    },
+    {
+      "path": "pano/kitchen_4k.ktx2",
+      "bytes": 6359000,
+      "sha256": "810cb3355d7227f52d5469e9b1484f3a3743cc98b1762f39ebd3540e277dcbc2"
+    },
+    {
+      "path": "pano/living_1k.jpg",
+      "bytes": 91261,
+      "sha256": "f3047d47666ff0b5eb4c5a3921b8c392bca48f815f29e5444c97b6210bc7b24e"
+    },
+    {
+      "path": "pano/living_4k.ktx2",
+      "bytes": 7193744,
+      "sha256": "3698afae86e1560cc8de03aa8e79aa903db578ae7c838f74a05d9d61352c534e"
+    },
+    {
+      "path": "pano/lounge_1k.jpg",
+      "bytes": 105048,
+      "sha256": "67a49d4386094370351e85ed95183430bd21039816acb9f265f2faa35db279b6"
+    },
+    {
+      "path": "pano/lounge_4k.ktx2",
+      "bytes": 7209124,
+      "sha256": "f04b0cb706139a935aa3f1cf066aa52f8949e01f1489c21a1f0c12ec838cdc5e"
+    },
+    {
+      "path": "tour.json",
+      "bytes": 9653,
+      "sha256": "4fa9240e57a98381d41b1294ff04e548a402961bb346ddece8da6a936b52f6eb"
+    }
+  ]
+}
