@@ -7,6 +7,8 @@ export interface UseTourResult {
   engine: TourEngine | null;
   /** True once the tour has loaded and is interactive. */
   ready: boolean;
+  /** True while an animated node transition is in progress. */
+  transitioning: boolean;
   /** Id of the node the user is currently standing at. */
   currentNode: string | null;
   viewMode: TourViewMode;
@@ -21,7 +23,8 @@ export interface UseTourResult {
 
 /** Imperative tour API. Must be used inside `<Tour>` children. */
 export function useTour(): UseTourResult {
-  const { engine, ready, currentNode, viewMode, measurementsVisible } = useContext(TourContext);
+  const { engine, ready, transitioning, currentNode, viewMode, measurementsVisible } =
+    useContext(TourContext);
 
   const goToNode = useCallback(
     async (nodeId: string, options?: TransitionOptions) => {
@@ -53,6 +56,7 @@ export function useTour(): UseTourResult {
   return {
     engine,
     ready,
+    transitioning,
     currentNode,
     viewMode,
     measurementsVisible,

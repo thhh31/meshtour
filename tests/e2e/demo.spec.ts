@@ -15,10 +15,10 @@ async function clickHotspot(page: Page, hotspotId: string) {
   await page.mouse.click(box!.x + hotspotScreen.x, box!.y + hotspotScreen.y);
 }
 
-test("loads Italian Flat by default and accepts an alternate tour URL", async ({ page }) => {
+test("loads Italian Flat v3 by default and accepts an alternate tour URL", async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(
-    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat Demo",
+    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v3",
   );
 
   await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
@@ -273,6 +273,37 @@ test("keeps all point buttons visible while the Italian Flat is loading", async 
     "aria-current",
     "location",
   );
+});
+
+test("disables point buttons until a scene transition finishes", async ({ page }) => {
+  await page.goto("/?tour=italian-flat&test=1");
+  const lounge = page.getByRole("button", { name: "Library Lounge" });
+  const kitchen = page.getByRole("button", { name: "Kitchen & Dining" });
+
+  await lounge.click({ noWaitAfter: true });
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "transitioning");
+  await page.evaluate(() => {
+    const engine = window.__MESHTOUR_TEST_ENGINE__!;
+    const clock = (engine as unknown as Record<symbol, { setProgress(progress: number): boolean }>)[
+      Symbol.for("meshtour.transitionTestClock")
+    ];
+    if (!clock?.setProgress(0.5)) throw new Error("Transition clock unavailable");
+  });
+
+  await expect(lounge).toBeDisabled();
+  await expect(kitchen).toBeDisabled();
+  await kitchen.click({ force: true });
+  expect(await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.state)).toBe("transitioning");
+
+  await page.evaluate(() => {
+    const engine = window.__MESHTOUR_TEST_ENGINE__!;
+    const clock = (engine as unknown as Record<symbol, { complete(): boolean }>)[
+      Symbol.for("meshtour.transitionTestClock")
+    ];
+    if (!clock?.complete()) throw new Error("Transition clock unavailable");
+  });
+  await expect(lounge).toHaveAttribute("aria-current", "location");
+  await expect(kitchen).toBeEnabled();
 });
 
 test("loads the production tour and walks between nodes", async ({ page }) => {

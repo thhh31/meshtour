@@ -17,6 +17,8 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
   );
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hoveredVariant, setHoveredVariant] = useState<string | null>(null);
+
   const activeSelected = engine?.getVariant(configurableId) ?? selected;
   const title = configurable?.label ?? "Material";
   const titleId = `material-title-${configurableId}`;
@@ -46,23 +48,42 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
       role="dialog"
       aria-labelledby={titleId}
       style={{
-        width: "min(330px, calc(100vw - 36px))",
+        width: "min(320px, calc(100vw - 32px))",
         boxSizing: "border-box",
-        padding: 14,
+        padding: "16px 18px",
         borderRadius: 16,
-        color: "#fff",
-        background: "rgba(14,14,18,0.92)",
-        border: "1px solid rgba(255,255,255,0.14)",
-        backdropFilter: "blur(18px)",
-        boxShadow: "0 14px 42px rgba(0,0,0,0.46)",
+        color: "#ffffff",
+        background: "rgba(10, 11, 15, 0.85)",
+        border: "1px solid rgba(255, 255, 255, 0.09)",
+        backdropFilter: "blur(24px) saturate(130%)",
+        WebkitBackdropFilter: "blur(24px) saturate(130%)",
+        boxShadow: "0 18px 48px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.03)",
+        fontFamily: "inherit",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div id={titleId} style={{ fontWeight: 700 }}>
+          <div
+            id={titleId}
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              letterSpacing: "0.03em",
+              color: "#ffffff",
+            }}
+          >
             {title}
           </div>
-          <div style={{ marginTop: 2, color: "rgba(255,255,255,0.58)", fontSize: 11 }}>
+          <div
+            style={{
+              marginTop: 2,
+              color: "rgba(255, 255, 255, 0.42)",
+              fontSize: 9.5,
+              fontWeight: 600,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+            }}
+          >
             Select a finish
           </div>
         </div>
@@ -70,16 +91,31 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
           type="button"
           onClick={onClose}
           aria-label={`Close ${title.toLowerCase()}`}
-          style={{ border: 0, color: "#aaa", background: "none", cursor: "pointer", fontSize: 20 }}
+          style={{
+            border: 0,
+            color: "rgba(255, 255, 255, 0.5)",
+            background: "none",
+            cursor: "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+            padding: 4,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 6,
+            transition: "color 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)")}
         >
           ×
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
         {configurable?.variants.map((variant) => {
           const active = activeSelected === variant.id;
           const pending = loading === variant.id;
+          const hovered = hoveredVariant === variant.id && !active;
           return (
             <button
               key={variant.id}
@@ -87,40 +123,63 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
               aria-pressed={active}
               disabled={!ready || loading !== null}
               onClick={() => void choose(variant.id)}
+              onMouseEnter={() => setHoveredVariant(variant.id)}
+              onMouseLeave={() => setHoveredVariant(null)}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                minHeight: 46,
-                padding: "7px 9px",
-                borderRadius: 11,
-                border: `1px solid ${active ? "#fff" : "rgba(255,255,255,0.13)"}`,
-                color: "#fff",
-                background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.035)",
+                minHeight: 44,
+                padding: "7px 10px",
+                borderRadius: 10,
+                border: "1px solid",
+                borderColor: active
+                  ? "rgba(255, 255, 255, 0.35)"
+                  : hovered
+                    ? "rgba(255, 255, 255, 0.16)"
+                    : "rgba(255, 255, 255, 0.08)",
+                color: active ? "#ffffff" : hovered ? "#ffffff" : "rgba(255, 255, 255, 0.8)",
+                background: active
+                  ? "rgba(255, 255, 255, 0.14)"
+                  : hovered
+                    ? "rgba(255, 255, 255, 0.07)"
+                    : "rgba(255, 255, 255, 0.035)",
                 cursor: ready && !loading ? "pointer" : "wait",
                 textAlign: "left",
                 font: "inherit",
-                fontSize: 11,
-                lineHeight: 1.2,
+                fontSize: 11.5,
+                fontWeight: active ? 600 : 400,
+                letterSpacing: "0.02em",
+                lineHeight: 1.25,
+                boxShadow: active ? "0 2px 8px rgba(0, 0, 0, 0.24)" : "none",
+                transition:
+                  "background 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1)",
               }}
             >
               <span
                 aria-hidden="true"
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   flex: "0 0 auto",
                   borderRadius: "50%",
-                  background: variant.swatch ?? "#888",
-                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.22)",
+                  background: variant.swatch ?? "#888888",
+                  boxShadow:
+                    "0 0 0 1px rgba(255, 255, 255, 0.18), inset 0 1px 2px rgba(0, 0, 0, 0.3)",
                 }}
               />
-              <span>{pending ? "Loading…" : (variant.label ?? variant.id)}</span>
+              <span style={{ overflowWrap: "anywhere" }}>
+                {pending ? "Loading…" : (variant.label ?? variant.id)}
+              </span>
             </button>
           );
         })}
       </div>
-      {error ? <div style={{ marginTop: 9, color: "#ffb4ad", fontSize: 11 }}>{error}</div> : null}
+      {error ? (
+        <div style={{ marginTop: 10, color: "#ff8585", fontSize: 11, letterSpacing: "0.02em" }}>
+          {error}
+        </div>
+      ) : null}
     </section>
   );
 }

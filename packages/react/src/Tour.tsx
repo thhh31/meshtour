@@ -85,6 +85,7 @@ export function Tour(props: TourProps): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<TourEngine | null>(null);
   const [ready, setReady] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<TourViewMode>("panorama");
@@ -126,9 +127,11 @@ export function Tour(props: TourProps): ReactNode {
       callbacksRef.current.onNodeChange?.(to, from);
     });
     tourEngine.on("transitionstart", ({ from, to }) => {
+      setTransitioning(true);
       callbacksRef.current.onTransitionStart?.(from, to);
     });
     tourEngine.on("transitionend", ({ from, to }) => {
+      setTransitioning(false);
       callbacksRef.current.onTransitionEnd?.(from, to);
     });
     tourEngine.on("hotspotclick", ({ hotspot }) => {
@@ -165,6 +168,7 @@ export function Tour(props: TourProps): ReactNode {
       tourEngine.dispose();
       setEngine(null);
       setReady(false);
+      setTransitioning(false);
       setError(null);
       setCurrentNode(null);
       setViewMode("panorama");
@@ -201,8 +205,8 @@ export function Tour(props: TourProps): ReactNode {
   const closePopup = useCallback(() => setPopup(null), []);
 
   const contextValue = useMemo(
-    () => ({ engine, ready, currentNode, viewMode, measurementsVisible }),
-    [engine, ready, currentNode, viewMode, measurementsVisible],
+    () => ({ engine, ready, transitioning, currentNode, viewMode, measurementsVisible }),
+    [engine, ready, transitioning, currentNode, viewMode, measurementsVisible],
   );
 
   return (

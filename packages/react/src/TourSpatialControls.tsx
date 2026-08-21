@@ -17,19 +17,21 @@ interface Size {
 }
 
 const iconButton: CSSProperties = {
-  width: 44,
-  height: 44,
+  width: 40,
+  height: 40,
   display: "grid",
   placeItems: "center",
-  border: "1px solid rgba(255,255,255,.14)",
-  borderRadius: 13,
-  color: "rgba(255,255,255,.92)",
-  background: "rgba(13,14,18,.86)",
-  boxShadow: "0 8px 26px rgba(0,0,0,.36)",
-  backdropFilter: "blur(16px) saturate(1.2)",
-  WebkitBackdropFilter: "blur(16px) saturate(1.2)",
+  border: "1px solid rgba(255, 255, 255, 0.09)",
+  borderRadius: 12,
+  color: "rgba(255, 255, 255, 0.85)",
+  background: "rgba(9, 10, 14, 0.68)",
+  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4)",
+  backdropFilter: "blur(20px) saturate(130%)",
+  WebkitBackdropFilter: "blur(20px) saturate(130%)",
   cursor: "pointer",
   padding: 0,
+  transition:
+    "background 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1)",
 };
 
 function MeasureIcon() {
@@ -247,7 +249,7 @@ export function TourSpatialControls({
 
   return (
     <>
-      <style>{`.meshtour-css-fullscreen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483000!important;background:#0b0b0e!important}`}</style>
+      <style>{`.meshtour-css-fullscreen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483000!important;background:#08080a!important}`}</style>
       {plan ? (
         <section
           aria-label="Apartment plan"
