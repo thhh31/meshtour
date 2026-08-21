@@ -137,7 +137,13 @@ Reproducible cold-start and transition measurements are in
 
 ## Known rendering artifacts (and what we do about them)
 
-- **Sparse transition coverage**: walk mode uses radial depth cubemaps to stop a panorama from painting surfaces hidden from its capture point. The bundled Italian Flat demo now uses this mode after calibrating every panorama to `−π/2`; if both viewpoints lack usable proxy coverage, use `rendering.transition: "fade"`.
+- **Sparse transition coverage**: walk mode uses conservatively filtered,
+  confidence-weighted radial depth to stop a panorama from painting surfaces
+  hidden from its capture point. Tours may provide a separate
+  `assets.visibilityMesh`, precomputed per-node KTX2 depth, and a baked
+  `assets.bridge` for true disocclusions; the interaction proxy and runtime
+  depth capture remain the v1-compatible fallback. Use
+  `rendering.transition: "fade"` for deliberately sparse tours.
 - **Proxy imprecision**: where the low-poly mesh deviates from the rendered geometry, texels swim slightly during movement. Keep walls/floors/large furniture reasonably faithful when decimating.
 - **Equirect seam/poles**: handled with derivative-aware dual sampling in the shader.
 

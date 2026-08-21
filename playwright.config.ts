@@ -29,12 +29,12 @@ export default defineConfig({
     {
       name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
-      testMatch: /(?:demo|performance)\.spec\.ts/,
+      testMatch: /(?:demo|performance|transition-quality)\.spec\.ts/,
     },
     {
       name: "mobile-chromium",
       use: { ...devices["Pixel 5"] },
-      testMatch: /(?:mobile|performance)\.spec\.ts/,
+      testMatch: /(?:mobile|performance|transition-quality)\.spec\.ts/,
     },
     {
       name: "desktop-firefox",

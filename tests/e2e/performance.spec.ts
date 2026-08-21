@@ -50,7 +50,7 @@ test("becomes interactive within two seconds on emulated fast 4G", async ({
 
 test("keeps transitions above the frame-rate budget", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  await page.goto("/?tour=italian-flat");
+  await page.goto("/?tour=italian-flat&test=1");
   await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
     "aria-current",
     "location",
@@ -69,6 +69,18 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
     performance.clearMarks("meshtour-transition-start");
     performance.clearMarks("meshtour-transition-end");
   });
+  const memoryBefore = await page.evaluate(() => ({
+    textures: window.__MESHTOUR_TEST_ENGINE__!.getRenderer().info.memory.textures,
+    geometries: window.__MESHTOUR_TEST_ENGINE__!.getRenderer().info.memory.geometries,
+  }));
+  const preparationPromise = page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        window.__MESHTOUR_TEST_ENGINE__!.once("transitionprepare", ({ durationMs }) =>
+          resolve(durationMs),
+        );
+      }),
+  );
   const frameSamplesPromise = page.evaluate(
     () =>
       new Promise<number[]>((resolve) => {
@@ -89,11 +101,13 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
     "location",
   );
   const samples = await frameSamplesPromise;
+  const preparationMs = await preparationPromise;
   const elapsed = samples.at(-1)! - samples[0]!;
   const fps = ((samples.length - 1) * 1_000) / elapsed;
   const frameTimes = samples.slice(1).map((sample, index) => sample - samples[index]!);
   const sortedFrameTimes = [...frameTimes].sort((a, b) => a - b);
   const p95FrameMs = sortedFrameTimes[Math.floor(sortedFrameTimes.length * 0.95)] ?? Infinity;
+  const droppedFrames = frameTimes.filter((frameTime) => frameTime > 35).length;
   const minimumFps = testInfo.project.name === "mobile-chromium" ? 30 : 55;
   const renderer = await page.evaluate(() => {
     const gl = document.querySelector("canvas")?.getContext("webgl2");
@@ -106,14 +120,6 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
     `${testInfo.project.name}: ${fps.toFixed(1)} fps, p95 ${p95FrameMs.toFixed(1)} ms, ${renderer}`,
   );
 
-  await testInfo.attach("transition-performance.json", {
-    body: JSON.stringify(
-      { fps, p95FrameMs, frames: samples.length, minimumFps, renderer },
-      null,
-      2,
-    ),
-    contentType: "application/json",
-  });
   const softwareRenderer = /swiftshader|llvmpipe|software/i.test(renderer);
   if (softwareRenderer) {
     testInfo.annotations.push({
@@ -135,4 +141,27 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
       "location",
     );
   }
+  const memoryAfter = await page.evaluate(() => ({
+    textures: window.__MESHTOUR_TEST_ENGINE__!.getRenderer().info.memory.textures,
+    geometries: window.__MESHTOUR_TEST_ENGINE__!.getRenderer().info.memory.geometries,
+  }));
+  await testInfo.attach("transition-performance.json", {
+    body: JSON.stringify(
+      {
+        preparationMs,
+        fps,
+        p95FrameMs,
+        droppedFrames,
+        frames: samples.length,
+        minimumFps,
+        renderer,
+        memoryBefore,
+        memoryAfter,
+      },
+      null,
+      2,
+    ),
+    contentType: "application/json",
+  });
+  expect(memoryAfter.geometries).toBeLessThanOrEqual(memoryBefore.geometries + 2);
 });

@@ -15,7 +15,7 @@ async function clickHotspot(page: Page, hotspotId: string) {
   await page.mouse.click(box!.x + hotspotScreen.x, box!.y + hotspotScreen.y);
 }
 
-test("loads Italian Flat by default and falls back for an unknown tour", async ({ page }) => {
+test("loads Italian Flat by default and accepts an alternate tour URL", async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(
     () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat Demo",
@@ -31,10 +31,67 @@ test("loads Italian Flat by default and falls back for an unknown tour", async (
   await expect(page.locator(".demo-title")).toHaveCount(0);
   await expect(page.locator(".demo-scene-switcher")).toHaveCount(0);
 
-  await page.goto("/?tour=unknown&test=1");
+  await page.goto("/?tour=italian-flat-v2&test=1");
   await page.waitForFunction(
-    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat Demo",
+    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v2",
   );
+  await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toBeVisible();
+});
+
+test("loads Italian Flat v2 with dedicated visibility and furniture-safe paths", async ({
+  page,
+}) => {
+  const assetResponses = new Map<string, number>();
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.includes("/tours/italian-flat-v2/")) {
+      assetResponses.set(url.pathname, response.status());
+    }
+  });
+
+  await page.goto("/?tour=italian-flat-v2&test=1");
+  await page.waitForFunction(
+    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v2",
+  );
+
+  const capability = await page.evaluate(() => {
+    const config = window.__MESHTOUR_TEST_ENGINE__!.getConfig()!;
+    return {
+      basePath: config.assets.basePath,
+      visibility: config.assets.visibilityMesh?.url,
+      sharedLinks: config.links.length,
+      directedLinks: config.nodes.reduce((sum, node) => sum + node.links.length, 0),
+      paths: config.nodes.flatMap((node) => node.links).filter((link) => link.path).length,
+    };
+  });
+  expect(capability).toEqual({
+    basePath: "./tours/italian-flat-v2/",
+    visibility: "mesh/transition-visibility.glb?v=1",
+    sharedLinks: 0,
+    directedLinks: 6,
+    paths: 6,
+  });
+  await expect
+    .poll(() => assetResponses.get("/tours/italian-flat-v2/mesh/transition-visibility.glb"))
+    .toBe(200);
+
+  await page.getByRole("button", { name: "Library Lounge" }).click({ noWaitAfter: true });
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "transitioning");
+  const midpoint = await page.evaluate(() => {
+    const engine = window.__MESHTOUR_TEST_ENGINE__!;
+    const clock = (
+      engine as unknown as Record<
+        symbol,
+        {
+          setProgress(progress: number): boolean;
+          snapshot(): { camera: [number, number, number] } | null;
+        }
+      >
+    )[Symbol.for("meshtour.transitionTestClock")];
+    if (!clock?.setProgress(0.5)) throw new Error("Transition clock unavailable");
+    return clock.snapshot()!.camera;
+  });
+  expect(midpoint[0]).toBeLessThan(1.5);
 });
 
 test("provides an automatic plan, measurements, textured top view, and fullscreen control", async ({

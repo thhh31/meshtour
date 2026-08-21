@@ -19,6 +19,8 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
   "units": "meters",
   "assets": {
     "mesh": { "url": "mesh/apartment.glb", "draco": true },
+    "visibilityMesh": { "url": "mesh/transition-visibility.glb", "draco": true },
+    "bridge": { "url": "mesh/transition-bridge.glb", "draco": true },
     "basePath": "https://cdn.example.com/tours/apartment/",
   },
   "rendering": {
@@ -78,8 +80,26 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
       "id": "living_room",
       "name": "Living Room",
       "position": [2.1, 1.6, -3.4],
-      "panorama": { "url": "pano/living_room", "yaw": 1.5708 },
-      "links": [{ "to": "kitchen", "position": [3.8, 0.02, -2.2] }],
+      "panorama": {
+        "url": "pano/living_room",
+        "yaw": 1.5708,
+        "correction": { "exposure": -0.15, "color": [1.0, 0.99, 0.97] },
+      },
+      "depth": {
+        "url": "depth/living-room.ktx2",
+        "encoding": "rgba8-linear-radial",
+        "size": 256,
+        "near": 0.025,
+        "far": 200,
+        "checksum": "sha256:…",
+      },
+      "links": [
+        {
+          "to": "kitchen",
+          "position": [3.8, 0.02, -2.2],
+          "path": { "waypoints": [[3.4, 1.6, -2.8]], "reversible": true },
+        },
+      ],
       "initialView": { "yaw": 0.4, "pitch": -0.05 },
     },
     {
@@ -126,11 +146,15 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
 
 ### `assets`
 
-| Field        | Type    | Default | Notes                                                                                                                                                    |
-| ------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mesh.url`   | string  | –       | Proxy mesh glTF/GLB. Optional **only** when the host passes a `proxyMesh` object to the engine.                                                          |
-| `mesh.draco` | boolean | `false` | Whether the glTF is Draco-compressed.                                                                                                                    |
-| `basePath`   | string  | –       | All relative URLs in the config resolve against this, so a tour folder is relocatable. Absolute (`https:`, `/…`), `blob:` and `data:` URLs pass through. |
+| Field                  | Type    | Default | Notes                                                                                                                                                    |
+| ---------------------- | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mesh.url`             | string  | –       | Interaction/render proxy mesh glTF/GLB. Optional **only** when the host passes a `proxyMesh` object to the engine.                                       |
+| `mesh.draco`           | boolean | `false` | Whether the glTF is Draco-compressed.                                                                                                                    |
+| `visibilityMesh.url`   | string  | –       | Optional higher-detail geometry used only for transition radial-depth capture. It is never added to interaction picking or the main scene.               |
+| `visibilityMesh.draco` | boolean | `false` | Whether the transition-visibility GLB is Draco-compressed.                                                                                               |
+| `bridge.url`           | string  | –       | Optional baked, unlit GLB shown behind rejected panorama fragments during a walk.                                                                        |
+| `bridge.draco`         | boolean | `false` | Whether the bridge GLB is Draco-compressed.                                                                                                              |
+| `basePath`             | string  | –       | All relative URLs in the config resolve against this, so a tour folder is relocatable. Absolute (`https:`, `/…`), `blob:` and `data:` URLs pass through. |
 
 ### `rendering`
 
@@ -241,6 +265,35 @@ engine.renderPlan(document.querySelector("canvas")!);
 | `links`        | Link[]            | `[]`     | Navigation markers unique to this viewpoint.                                                                |
 | `initialView`  | `{ yaw, pitch? }` | –        | Camera orientation applied when the tour starts at this node.                                               |
 
+Each panorama may define a deterministic `correction` with an `exposure`
+offset in stops and a linear-RGB `color` multiplier. The correction applies to
+the base panorama and its transparent variant layers before A/B blending.
+
+A node may also reference a precomputed radial-depth KTX2 cubemap:
+
+- `encoding` is currently `"rgba8-linear-radial"`;
+- `near` and `far` must exactly match the runtime values (`0.025` and `200`
+  meters), otherwise loading fails with the node id and URL;
+- `size` records one cubemap-face dimension; and
+- `checksum` records the compiler-produced content checksum.
+
+When `depth` is absent, MeshTour captures the same packed radial depth at
+runtime from `assets.visibilityMesh`, or from `assets.mesh` as the final
+backward-compatible fallback.
+
+### Authored transition paths
+
+A node-specific link may include `path.waypoints`, expressed as world-space
+camera positions. Shared top-level links cannot define a path because they
+have no single source capture. MeshTour always inserts the source and
+destination capture positions as exact endpoints and samples the resulting
+centripetal spline by arc length. Set
+`reversible: false` to prevent an otherwise pathless opposite edge from reusing
+the waypoints in reverse; an explicit path on the opposite link always wins.
+The author overlay displays draggable waypoint handles, preserves their eye
+height while dragging, and reports proxy intersections with **Check path
+clearance**.
+
 ### Link
 
 Links carry **their own floor positions** — they are authored, never
@@ -253,6 +306,7 @@ unique to one location.
 | `to`           | string    | ✅       | Target node id. Must exist.                                                                        |
 | `position`     | [x, y, z] | ✅       | Floor disc placement (y slightly above the floor).                                                 |
 | `hideAtTarget` | boolean   | `true`   | For a shared link, hide its marker while `to` is the current node. Set `false` to keep it visible. |
+| `path`         | object    | –        | Optional `{ waypoints, reversible? }` camera path described above.                                 |
 
 ### Hotspot
 

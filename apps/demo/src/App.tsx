@@ -15,6 +15,26 @@ const DEMO_TOURS = {
       { id: "lounge", name: "Library Lounge" },
     ],
   },
+  "italian-flat-v2": {
+    loadingLabel: "Italian Flat v2",
+    config: "./tours/italian-flat-v2/tour.json?v=1",
+    loadingDetail: "Authored walk paths with dedicated transition visibility",
+    points: [
+      { id: "kitchen", name: "Kitchen & Dining" },
+      { id: "living", name: "Living Room" },
+      { id: "lounge", name: "Library Lounge" },
+    ],
+  },
+  "italian-flat-v3": {
+    loadingLabel: "Italian Flat v3",
+    config: "./tours/italian-flat-v3/tour.json?v=1",
+    loadingDetail: "Covered windows and doors proxy geometry",
+    points: [
+      { id: "kitchen", name: "Kitchen & Dining" },
+      { id: "living", name: "Living Room" },
+      { id: "lounge", name: "Library Lounge" },
+    ],
+  },
 } as const;
 
 type DemoTourId = keyof typeof DEMO_TOURS;
