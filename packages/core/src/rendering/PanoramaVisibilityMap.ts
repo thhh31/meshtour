@@ -20,7 +20,10 @@ export const PANORAMA_DEPTH_NEAR = 0.025;
 export const PANORAMA_DEPTH_FAR = 200;
 /** @deprecated The material now derives an adaptive tolerance from distance and texel size. */
 export const PANORAMA_DEPTH_BIAS = 0.012;
-export const PANORAMA_DEPTH_SIZE = 256;
+// Panorama transitions still rely on this map to reject geometry hidden from
+// either capture point. Keep enough detail to prevent foreground cutouts from
+// turning into conspicuous stair steps while the camera moves between nodes.
+export const PANORAMA_DEPTH_SIZE = 1024;
 
 const depthVertexShader = /* glsl */ `
 varying vec3 vWorldPosition;

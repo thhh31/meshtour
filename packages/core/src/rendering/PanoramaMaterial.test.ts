@@ -27,6 +27,16 @@ describe("PanoramaProjection texture upgrades", () => {
     expect(chair.uniforms.uHasLayerA.value).toBe(0);
   });
 
+  it("uses raster depth instead of eroding settled configurable layers", () => {
+    const projection = new PanoramaProjection();
+    const layer = projection.createLayerMaterial();
+
+    expect(layer.material.defines?.USE_PANORAMA_LAYER).toBe(1);
+    expect(layer.material.fragmentShader).toContain("needsSourceVisibility = uHasB > 0.5");
+
+    projection.dispose();
+  });
+
   it("does not report a replacement for an inactive prefetched texture", () => {
     const projection = new PanoramaProjection();
 

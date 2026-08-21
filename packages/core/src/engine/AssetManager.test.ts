@@ -1,5 +1,5 @@
-import type { WebGLRenderer } from "three";
-import { describe, expect, it } from "vitest";
+import { Texture, TextureLoader, type WebGLRenderer } from "three";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { validateConfig } from "../config/loader";
 import { AssetManager } from "./AssetManager";
 
@@ -27,6 +27,10 @@ function depthManager(depth: Record<string, unknown>) {
   return new AssetManager(renderer, config);
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("AssetManager panorama URLs", () => {
   it("uses distinct preview and full suffixes", () => {
     const assets = manager({ previewSuffix: "_1k.jpg", fullSuffix: "_2k.ktx2" });
@@ -42,6 +46,16 @@ describe("AssetManager panorama URLs", () => {
     const assets = manager(rendering);
     expect(assets.panoramaUrl("room", "preview")).toBe(expected);
     expect(assets.panoramaUrl("room", "full")).toBe(expected);
+  });
+});
+
+describe("AssetManager configurable layers", () => {
+  it("uploads transparent layers with premultiplied alpha for edge-safe filtering", async () => {
+    const texture = new Texture<HTMLImageElement>();
+    vi.spyOn(TextureLoader.prototype, "loadAsync").mockResolvedValue(texture);
+    const assets = manager({});
+
+    expect((await assets.ensureLayer("layers/rug.png")).premultiplyAlpha).toBe(true);
   });
 });
 

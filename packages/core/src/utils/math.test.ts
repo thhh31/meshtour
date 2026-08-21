@@ -45,10 +45,18 @@ describe("transitionBlend", () => {
     expect(transitionBlend(1)).toBe(1);
   });
 
-  it("keeps the panorama handoff within the middle 16% of travel", () => {
-    expect(transitionBlend(0.41)).toBe(0);
+  it("uses a centered half-second ease-in-out blend for the default transition", () => {
+    expect(transitionBlend(0.29)).toBe(0);
+    expect(transitionBlend(0.4)).toBeGreaterThan(0);
     expect(transitionBlend(0.5)).toBeCloseTo(0.5);
-    expect(transitionBlend(0.59)).toBe(1);
+    expect(transitionBlend(0.6)).toBeLessThan(1);
+    expect(transitionBlend(0.71)).toBe(1);
+  });
+
+  it("keeps the texture blend near half a second when camera travel is slower", () => {
+    expect(transitionBlend(0.37, 2)).toBe(0);
+    expect(transitionBlend(0.5, 2)).toBeCloseTo(0.5);
+    expect(transitionBlend(0.63, 2)).toBe(1);
   });
 
   it("is monotonically non-decreasing", () => {

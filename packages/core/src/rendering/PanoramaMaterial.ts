@@ -172,11 +172,13 @@ void main() {
   // blending so the configurable object moves exactly with the base image.
   if (uHasLayerA > 0.5) {
     vec4 layerA = samplePano(uLayerA, uCenterA, uYawA);
-    colA = vec4(mix(colA.rgb, layerA.rgb, layerA.a), 1.0);
+    // Layer textures are uploaded with premultiplied alpha so filtering and
+    // generated mipmaps cannot pull transparent black into silhouette edges.
+    colA = vec4(colA.rgb * (1.0 - layerA.a) + layerA.rgb, 1.0);
   }
   if (uHasLayerB > 0.5) {
     vec4 layerB = samplePano(uLayerB, uCenterB, uYawB);
-    colB = vec4(mix(colB.rgb, layerB.rgb, layerB.a), 1.0);
+    colB = vec4(colB.rgb * (1.0 - layerB.a) + layerB.rgb, 1.0);
   }
 
 #endif
@@ -189,12 +191,24 @@ void main() {
 
 #ifdef USE_SOURCE_VISIBILITY
 
-  confidenceA = uHasA > 0.5
-    ? sourceConfidence(uDepthA, uHasDepthA, uCenterA)
-    : 0.0;
-  confidenceB = uHasB > 0.5
-    ? sourceConfidence(uDepthB, uHasDepthB, uCenterB)
-    : 0.0;
+  // At a settled panorama node, ordinary raster depth already gives layer
+  // materials the exact foreground silhouette. Applying the source-depth
+  // neighborhood filter as well would erode the layer by one texel and expose
+  // a halo of the original material. During a transition both projection
+  // slots are populated, so retain source visibility to prevent reprojection
+  // onto surfaces that were hidden from either capture point.
+  bool needsSourceVisibility = true;
+#ifdef USE_PANORAMA_LAYER
+  needsSourceVisibility = uHasB > 0.5;
+#endif
+  if (needsSourceVisibility) {
+    confidenceA = uHasA > 0.5
+      ? sourceConfidence(uDepthA, uHasDepthA, uCenterA)
+      : 0.0;
+    confidenceB = uHasB > 0.5
+      ? sourceConfidence(uDepthB, uHasDepthB, uCenterB)
+      : 0.0;
+  }
 
 #endif
 

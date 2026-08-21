@@ -407,7 +407,7 @@ export class NavigationManager {
       const fade = t < 0.42 ? smoothstep(0, 0.42, t) : t <= 0.58 ? 1 : 1 - smoothstep(0.58, 1, t);
       this.onFade?.(fade);
     } else {
-      this.projection.setBlend(transitionBlend(t));
+      this.projection.setBlend(transitionBlend(t, transition.duration));
       this.onFade?.(0);
     }
     this.onTransitionProgress?.(t, !fadeTransition);

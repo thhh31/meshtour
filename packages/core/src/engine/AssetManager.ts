@@ -136,7 +136,10 @@ export class AssetManager {
     return Boolean(previewSuffix && fullSuffix && previewSuffix !== fullSuffix);
   }
 
-  private async loadTexture(url: string): Promise<Texture> {
+  private async loadTexture(
+    url: string,
+    options: { premultiplyAlpha?: boolean } = {},
+  ): Promise<Texture> {
     let texture: Texture;
     if (/\.ktx2($|\?)/i.test(url)) {
       texture = await this.getKtx2Loader().loadAsync(url);
@@ -147,6 +150,10 @@ export class AssetManager {
       texture.generateMipmaps = true;
     }
     texture.colorSpace = SRGBColorSpace;
+    // Transparent configurable layers are composited as premultiplied color.
+    // This keeps transparent black PNG texels from bleeding into filtered
+    // alpha edges and generated mip levels.
+    texture.premultiplyAlpha = options.premultiplyAlpha ?? false;
     // Repeat horizontally so the shader's seam-safe sampling (negative u) wraps.
     texture.wrapS = RepeatWrapping;
     texture.wrapT = ClampToEdgeWrapping;
@@ -251,7 +258,7 @@ export class AssetManager {
     }
     if (entry.texture) return Promise.resolve(entry.texture);
     if (!entry.promise) {
-      entry.promise = this.loadTexture(resolved).then(
+      entry.promise = this.loadTexture(resolved, { premultiplyAlpha: true }).then(
         (texture) => {
           if (this.layerTextures.get(resolved) !== entry) {
             texture.dispose();

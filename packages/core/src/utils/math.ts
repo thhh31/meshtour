@@ -18,12 +18,16 @@ export function easeInOutCubic(t: number): number {
 }
 
 /**
- * Blend curve for the panorama handoff during a transition. Keeping the blend
- * narrow avoids prolonged double exposure for fine geometry that is absent
- * from (or imperfectly approximated by) the navigation proxy.
+ * A krpano-style BLEND between the departing and arriving panoramas. The
+ * texture dissolve lasts about half a second regardless of the overall camera
+ * travel duration, and uses an ease-in-out curve to avoid visible endpoints.
  */
-export function transitionBlend(t: number): number {
-  return smoothstep(0.42, 0.58, t);
+export function transitionBlend(t: number, transitionDuration = 1.2, blendDuration = 0.5): number {
+  const duration = Math.max(Number.EPSILON, transitionDuration);
+  const window = clamp(blendDuration / duration, Number.EPSILON, 1);
+  const start = (1 - window) / 2;
+  const progress = clamp((t - start) / window, 0, 1);
+  return easeInOutCubic(progress);
 }
 
 /**
