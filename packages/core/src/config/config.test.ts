@@ -56,6 +56,44 @@ describe("tour config schema", () => {
     expect(parsed.rendering.transition).toBe("fade");
   });
 
+  it("accepts optional transition visibility, bridge, depth, correction, and path metadata", () => {
+    const config = validConfig();
+    config.nodes[0] = minimalNode("living_room", {
+      panorama: {
+        url: "pano/living_room",
+        correction: { exposure: -0.25, color: [1, 0.98, 0.95] },
+      },
+      depth: {
+        url: "depth/living.ktx2",
+        encoding: "rgba8-linear-radial",
+        size: 256,
+        near: 0.025,
+        far: 200,
+        checksum: "sha256:example",
+      },
+      links: [
+        {
+          to: "kitchen",
+          position: [1, 0, 1],
+          path: { waypoints: [[0.5, 1.6, 0.5]] },
+        },
+      ],
+    });
+    const parsed = validateConfig({
+      ...config,
+      assets: {
+        visibilityMesh: { url: "mesh/visibility.glb", draco: true },
+        bridge: { url: "mesh/bridge.glb" },
+      },
+    });
+
+    expect(parsed.assets.visibilityMesh?.draco).toBe(true);
+    expect(parsed.assets.bridge?.draco).toBe(false);
+    expect(parsed.nodes[0]!.depth?.encoding).toBe("rgba8-linear-radial");
+    expect(parsed.nodes[0]!.panorama.correction?.exposure).toBe(-0.25);
+    expect(parsed.nodes[0]!.links[0]!.path?.reversible).toBe(true);
+  });
+
   it("accepts reusable overview, ceiling, baked top view, and measurement metadata", () => {
     const parsed = validateConfig({
       ...validConfig(),
@@ -142,6 +180,21 @@ describe("tour config schema", () => {
         links: [{ to: "garage", position: [0, 0, 0] }],
       }),
     ).toThrow(/Link target "garage" does not exist/);
+  });
+
+  it("rejects source-specific paths on shared links", () => {
+    expect(() =>
+      validateConfig({
+        ...validConfig(),
+        links: [
+          {
+            to: "kitchen",
+            position: [0, 0, 0],
+            path: { waypoints: [[0.5, 1.6, 0.5]] },
+          },
+        ],
+      }),
+    ).toThrow(/Shared links cannot define a source-specific transition path/);
   });
 
   it("rejects an unknown start node", () => {

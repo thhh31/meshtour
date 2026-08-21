@@ -8,6 +8,8 @@ export interface TourEventMap {
   /** Asset loading progress, 0..1 overall for the initial load. */
   loadprogress: { progress: number; url?: string };
   nodechange: { from: string | null; to: string };
+  /** All target panorama/layer/depth/bridge work completed before movement. */
+  transitionprepare: { from: string; to: string; durationMs: number };
   transitionstart: { from: string; to: string };
   transitionend: { from: string; to: string };
   hotspotclick: { hotspot: HotspotConfig };

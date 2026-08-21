@@ -9,6 +9,14 @@ import { z } from "zod";
 export const vec3Schema = z.tuple([z.number(), z.number(), z.number()]);
 export type Vec3 = z.infer<typeof vec3Schema>;
 
+export const transitionPathSchema = z.object({
+  /** Intermediate camera positions. Capture positions are always inserted as exact endpoints. */
+  waypoints: z.array(vec3Schema).min(1),
+  /** Allow the opposite directed edge to reuse this path in reverse when it has no path of its own. */
+  reversible: z.boolean().default(true),
+});
+export type TransitionPathConfig = z.infer<typeof transitionPathSchema>;
+
 export const linkSchema = z.object({
   /** Target node id. */
   to: z.string().min(1),
@@ -16,6 +24,8 @@ export const linkSchema = z.object({
   position: vec3Schema,
   /** Hide this shared marker while its target node is current (default true). */
   hideAtTarget: z.boolean().optional(),
+  /** Optional arc-length-parameterized walk path. */
+  path: transitionPathSchema.optional(),
 });
 export type LinkConfig = z.infer<typeof linkSchema>;
 
@@ -36,8 +46,35 @@ export const panoramaSchema = z.object({
   url: z.string().min(1),
   /** Yaw alignment offset in radians applied to this panorama. */
   yaw: z.number().default(0),
+  /** Deterministic source correction applied before panorama handoff. */
+  correction: z
+    .object({
+      /** Exposure offset in stops. */
+      exposure: z.number().finite().default(0),
+      /** Linear RGB multiplier. */
+      color: z
+        .tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()])
+        .default([1, 1, 1]),
+    })
+    .optional(),
 });
 export type PanoramaConfig = z.infer<typeof panoramaSchema>;
+
+export const radialDepthSchema = z
+  .object({
+    /** GPU-ready KTX2 cubemap containing packed linear radial distance. */
+    url: z.string().min(1),
+    encoding: z.literal("rgba8-linear-radial"),
+    size: z.number().int().positive(),
+    near: z.number().positive(),
+    far: z.number().positive(),
+    /** Content checksum recorded by the asset compiler (for example sha256:...). */
+    checksum: z.string().min(1),
+  })
+  .refine((depth) => depth.far > depth.near, {
+    message: "Radial depth far must be greater than near",
+  });
+export type RadialDepthConfig = z.infer<typeof radialDepthSchema>;
 
 export const nodeSchema = z.object({
   id: z.string().min(1),
@@ -45,6 +82,8 @@ export const nodeSchema = z.object({
   /** Capture position in world space, Y-up meters. */
   position: vec3Schema,
   panorama: panoramaSchema,
+  /** Optional precomputed radial-depth cubemap; runtime capture remains the fallback. */
+  depth: radialDepthSchema.optional(),
   links: z.array(linkSchema).default([]),
   initialView: initialViewSchema.optional(),
 });
@@ -77,6 +116,20 @@ export type HotspotConfig = z.infer<typeof hotspotSchema>;
 export const assetsSchema = z.object({
   /** Proxy mesh (glTF). Optional when the engine is given a `proxyMesh` object directly. */
   mesh: z
+    .object({
+      url: z.string().min(1),
+      draco: z.boolean().default(false),
+    })
+    .optional(),
+  /** Higher-detail, render-only geometry used to capture transition visibility. */
+  visibilityMesh: z
+    .object({
+      url: z.string().min(1),
+      draco: z.boolean().default(false),
+    })
+    .optional(),
+  /** Optional baked, unlit geometry used only to cover true disocclusions while moving. */
+  bridge: z
     .object({
       url: z.string().min(1),
       draco: z.boolean().default(false),
@@ -262,6 +315,13 @@ export const tourConfigSchema = z
       });
     }
     config.links.forEach((link, i) => {
+      if (link.path) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["links", i, "path"],
+          message: "Shared links cannot define a source-specific transition path",
+        });
+      }
       if (!ids.has(link.to)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

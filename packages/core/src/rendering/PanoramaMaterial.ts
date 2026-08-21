@@ -9,18 +9,23 @@ import {
   type IUniform,
   type Side,
 } from "three";
+import { PANORAMA_DEPTH_FAR, PANORAMA_DEPTH_NEAR } from "./PanoramaVisibilityMap";
 import {
-  PANORAMA_DEPTH_BIAS,
-  PANORAMA_DEPTH_FAR,
-  PANORAMA_DEPTH_NEAR,
-} from "./PanoramaVisibilityMap";
+  DEPTH_GRAZING_SCALE,
+  DEPTH_TEXEL_SCALE,
+  DEPTH_TOLERANCE_CONSTANT,
+  DEPTH_TOLERANCE_MAX,
+  DEPTH_TOLERANCE_MIN,
+} from "./visibilityMath";
 
 const vertexShader = /* glsl */ `
 varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 void main() {
   vec4 worldPosition = modelMatrix * vec4(position, 1.0);
   vWorldPosition = worldPosition.xyz;
+  vWorldNormal = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * viewMatrix * worldPosition;
 }
 `;
@@ -43,6 +48,12 @@ uniform float uHasDepthB;
 uniform float uDepthNear;
 uniform float uDepthFar;
 uniform float uDepthBias;
+uniform float uExposureA;
+uniform float uExposureB;
+uniform vec3 uColorA;
+uniform vec3 uColorB;
+uniform float uDepthFilter;
+uniform float uDebugView;
 
 #ifdef USE_PANORAMA_LAYER
 
@@ -54,6 +65,7 @@ uniform float uHasLayerB;
 #endif
 
 varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 out vec4 fragColor;
 
 const float PI = 3.141592653589793;
@@ -87,7 +99,19 @@ vec4 samplePano(sampler2D tex, vec3 center, float yaw) {
 
 #ifdef USE_SOURCE_VISIBILITY
 
-float sourceVisibility(
+float unpackDistance(vec4 packedDepth) {
+  return mix(uDepthNear, uDepthFar, unpackRGBAToDepth(packedDepth));
+}
+
+float visibilityForDepth(float fragmentDistance, float storedDistance, float tolerance) {
+  return 1.0 - smoothstep(
+    storedDistance + tolerance * 0.2,
+    storedDistance + tolerance,
+    fragmentDistance
+  );
+}
+
+float sourceConfidence(
   samplerCube depthMap,
   float hasDepth,
   vec3 center
@@ -95,9 +119,43 @@ float sourceVisibility(
   if (hasDepth < 0.5) return 1.0;
   vec3 sourceRay = vWorldPosition - center;
   float fragmentDistance = length(sourceRay);
-  float normalizedDepth = unpackRGBAToDepth(texture(depthMap, normalize(sourceRay)));
-  float nearestDistance = mix(uDepthNear, uDepthFar, normalizedDepth);
-  return fragmentDistance <= nearestDistance + uDepthBias ? 1.0 : 0.0;
+  vec3 direction = normalize(sourceRay);
+  float mapSize = float(textureSize(depthMap, 0).x);
+  float texel = 2.0 / max(1.0, mapSize);
+  float alignment = abs(dot(direction, normalize(vWorldNormal)));
+  float tolerance = clamp(
+    uDepthBias + (2.0 * fragmentDistance / max(1.0, mapSize)) * ${DEPTH_TEXEL_SCALE.toFixed(8)}
+      + (1.0 - alignment) * ${DEPTH_GRAZING_SCALE.toFixed(8)},
+    ${DEPTH_TOLERANCE_MIN.toFixed(8)},
+    ${DEPTH_TOLERANCE_MAX.toFixed(8)}
+  );
+
+  float centerDepth = unpackDistance(texture(depthMap, direction));
+  if (uDepthFilter < 0.5) {
+    return visibilityForDepth(fragmentDistance, centerDepth, tolerance);
+  }
+
+  vec3 helper = abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 tangent = normalize(cross(helper, direction));
+  vec3 bitangent = cross(direction, tangent);
+  float depth1 = unpackDistance(texture(depthMap, normalize(direction + tangent * texel)));
+  float depth2 = unpackDistance(texture(depthMap, normalize(direction - tangent * texel)));
+  float depth3 = unpackDistance(texture(depthMap, normalize(direction + bitangent * texel)));
+  float depth4 = unpackDistance(texture(depthMap, normalize(direction - bitangent * texel)));
+  float nearestDepth = min(centerDepth, min(min(depth1, depth2), min(depth3, depth4)));
+  float conservative = visibilityForDepth(fragmentDistance, nearestDepth, tolerance);
+  if (uDepthFilter < 1.5) return conservative;
+
+  float pcf = (
+    visibilityForDepth(fragmentDistance, centerDepth, tolerance)
+      + visibilityForDepth(fragmentDistance, depth1, tolerance)
+      + visibilityForDepth(fragmentDistance, depth2, tolerance)
+      + visibilityForDepth(fragmentDistance, depth3, tolerance)
+      + visibilityForDepth(fragmentDistance, depth4, tolerance)
+  ) / 5.0;
+  float farthestDepth = max(centerDepth, max(max(depth1, depth2), max(depth3, depth4)));
+  float edge = smoothstep(tolerance, tolerance * 3.0, farthestDepth - nearestDepth);
+  return mix(pcf, min(pcf, conservative), edge);
 }
 
 #endif
@@ -123,30 +181,80 @@ void main() {
 
 #endif
 
+  colA.rgb *= exp2(uExposureA) * uColorA;
+  colB.rgb *= exp2(uExposureB) * uColorB;
+
+  float confidenceA = uHasA > 0.5 ? 1.0 : 0.0;
+  float confidenceB = uHasB > 0.5 ? 1.0 : 0.0;
+
 #ifdef USE_SOURCE_VISIBILITY
 
-  float visibleA = uHasA > 0.5
-    ? sourceVisibility(uDepthA, uHasDepthA, uCenterA)
+  confidenceA = uHasA > 0.5
+    ? sourceConfidence(uDepthA, uHasDepthA, uCenterA)
     : 0.0;
-  float visibleB = uHasB > 0.5
-    ? sourceVisibility(uDepthB, uHasDepthB, uCenterB)
-    : visibleA;
-
-  // If one source did not see this surface, use the other source instead of
-  // stretching an occluding foreground object over it. Only reject fragments
-  // hidden from both capture points; discarding then lets a deeper visible
-  // proxy surface (or the skysphere) render.
-  if (visibleA < 0.5 && visibleB < 0.5) discard;
-  if (visibleA < 0.5) colA = colB;
-  if (visibleB < 0.5) colB = colA;
+  confidenceB = uHasB > 0.5
+    ? sourceConfidence(uDepthB, uHasDepthB, uCenterB)
+    : 0.0;
 
 #endif
 
+  if (uDebugView > 0.5 && uDebugView < 1.5) {
+    fragColor = linearToOutputTexel(colA);
+    return;
+  }
+  if (uDebugView > 1.5 && uDebugView < 2.5) {
+    fragColor = linearToOutputTexel(colB);
+    return;
+  }
+  if (uDebugView > 3.5 && uDebugView < 4.5) {
+    fragColor = vec4(vec3(confidenceA), 1.0);
+    return;
+  }
+  if (uDebugView > 4.5 && uDebugView < 5.5) {
+    fragColor = vec4(vec3(confidenceB), 1.0);
+    return;
+  }
+  if (uDebugView > 5.5 && uDebugView < 6.5) {
+    bool rejected = confidenceA <= 0.001 && confidenceB <= 0.001;
+    fragColor = rejected ? vec4(1.0, 0.0, 0.7, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  float weightA = (1.0 - uBlend) * confidenceA;
+  float weightB = uBlend * confidenceB;
+  // A valid sole source is evidence even outside the global handoff window.
+  if (confidenceA <= 0.001 && confidenceB > 0.001) weightB = confidenceB;
+  if (confidenceB <= 0.001 && confidenceA > 0.001) weightA = confidenceA;
+  float totalWeight = weightA + weightB;
+  // Leave this proxy fragment uncovered so the baked bridge (or a deeper
+  // proxy/skysphere fallback) can provide true-disocclusion coverage.
+  if (totalWeight <= 0.001) discard;
+  vec4 color = (weightA * colA + weightB * colB) / totalWeight;
+
   // linearToOutputTexel is injected by the renderer for the active output
   // color space (same conversion <colorspace_fragment> performs).
-  fragColor = linearToOutputTexel(mix(colA, colB, uBlend));
+  fragColor = linearToOutputTexel(color);
 }
 `;
+
+export type PanoramaDebugView =
+  | "normal"
+  | "source-a"
+  | "source-b"
+  | "blend"
+  | "visibility-a"
+  | "visibility-b"
+  | "rejected-both";
+
+const DEBUG_VIEW_VALUE: Record<PanoramaDebugView, number> = {
+  normal: 0,
+  "source-a": 1,
+  "source-b": 2,
+  blend: 3,
+  "visibility-a": 4,
+  "visibility-b": 5,
+  "rejected-both": 6,
+};
 
 export interface PanoramaUniforms {
   uPanoA: { value: Texture | null };
@@ -166,6 +274,12 @@ export interface PanoramaUniforms {
   uDepthNear: { value: number };
   uDepthFar: { value: number };
   uDepthBias: { value: number };
+  uExposureA: { value: number };
+  uExposureB: { value: number };
+  uColorA: { value: Vector3 };
+  uColorB: { value: Vector3 };
+  uDepthFilter: { value: number };
+  uDebugView: { value: number };
 }
 
 export interface PanoramaLayerUniforms {
@@ -204,7 +318,13 @@ export class PanoramaProjection {
     uHasDepthB: { value: 0 },
     uDepthNear: { value: PANORAMA_DEPTH_NEAR },
     uDepthFar: { value: PANORAMA_DEPTH_FAR },
-    uDepthBias: { value: PANORAMA_DEPTH_BIAS },
+    uDepthBias: { value: DEPTH_TOLERANCE_CONSTANT },
+    uExposureA: { value: 0 },
+    uExposureB: { value: 0 },
+    uColorA: { value: new Vector3(1, 1, 1) },
+    uColorB: { value: new Vector3(1, 1, 1) },
+    uDepthFilter: { value: 2 },
+    uDebugView: { value: 0 },
   };
 
   private materials: ShaderMaterial[] = [];
@@ -264,22 +384,38 @@ export class PanoramaProjection {
     this.uniforms.uBackground.value.set(color);
   }
 
-  setSlotA(texture: Texture, center: Vector3, yaw: number, depth?: CubeTexture): void {
+  setSlotA(
+    texture: Texture,
+    center: Vector3,
+    yaw: number,
+    depth?: CubeTexture,
+    correction?: { exposure?: number; color?: [number, number, number] },
+  ): void {
     this.uniforms.uPanoA.value = texture;
     this.uniforms.uCenterA.value.copy(center);
     this.uniforms.uYawA.value = yaw;
     this.uniforms.uHasA.value = 1;
     this.uniforms.uDepthA.value = depth ?? null;
     this.uniforms.uHasDepthA.value = depth ? 1 : 0;
+    this.uniforms.uExposureA.value = correction?.exposure ?? 0;
+    this.uniforms.uColorA.value.fromArray(correction?.color ?? [1, 1, 1]);
   }
 
-  setSlotB(texture: Texture, center: Vector3, yaw: number, depth?: CubeTexture): void {
+  setSlotB(
+    texture: Texture,
+    center: Vector3,
+    yaw: number,
+    depth?: CubeTexture,
+    correction?: { exposure?: number; color?: [number, number, number] },
+  ): void {
     this.uniforms.uPanoB.value = texture;
     this.uniforms.uCenterB.value.copy(center);
     this.uniforms.uYawB.value = yaw;
     this.uniforms.uHasB.value = 1;
     this.uniforms.uDepthB.value = depth ?? null;
     this.uniforms.uHasDepthB.value = depth ? 1 : 0;
+    this.uniforms.uExposureB.value = correction?.exposure ?? 0;
+    this.uniforms.uColorB.value.fromArray(correction?.color ?? [1, 1, 1]);
   }
 
   /** Swap an upgraded texture (preview -> full res) into whichever slot holds the node. */
@@ -310,12 +446,22 @@ export class PanoramaProjection {
     u.uHasA.value = 1;
     u.uDepthA.value = u.uDepthB.value;
     u.uHasDepthA.value = u.uHasDepthB.value;
+    u.uExposureA.value = u.uExposureB.value;
+    u.uColorA.value.copy(u.uColorB.value);
+    u.uPanoB.value = null;
+    u.uDepthB.value = null;
+    u.uHasB.value = 0;
+    u.uHasDepthB.value = 0;
     u.uBlend.value = 0;
   }
 
   /** Live-update the yaw of slot A (used by author mode's yaw nudge). */
   setYawA(yaw: number): void {
     this.uniforms.uYawA.value = yaw;
+  }
+
+  setDebugView(view: PanoramaDebugView): void {
+    this.uniforms.uDebugView.value = DEBUG_VIEW_VALUE[view];
   }
 
   dispose(): void {

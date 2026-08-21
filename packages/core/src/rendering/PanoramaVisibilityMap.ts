@@ -18,7 +18,9 @@ import {
 
 export const PANORAMA_DEPTH_NEAR = 0.025;
 export const PANORAMA_DEPTH_FAR = 200;
-export const PANORAMA_DEPTH_BIAS = 0.08;
+/** @deprecated The material now derives an adaptive tolerance from distance and texel size. */
+export const PANORAMA_DEPTH_BIAS = 0.012;
+export const PANORAMA_DEPTH_SIZE = 256;
 
 const depthVertexShader = /* glsl */ `
 varying vec3 vWorldPosition;
@@ -87,7 +89,7 @@ export class PanoramaVisibilityMap {
     const cached = this.targets.get(nodeId);
     if (cached) return cached.texture;
 
-    const target = new WebGLCubeRenderTarget(256, {
+    const target = new WebGLCubeRenderTarget(PANORAMA_DEPTH_SIZE, {
       format: RGBAFormat,
       type: UnsignedByteType,
       minFilter: NearestFilter,

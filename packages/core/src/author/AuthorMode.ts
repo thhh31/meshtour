@@ -3,6 +3,7 @@ import {
   MeshBasicMaterial,
   PerspectiveCamera,
   Raycaster,
+  Scene,
   Vector2,
   Vector3,
   type Object3D,
@@ -11,8 +12,13 @@ import type { HotspotConfig, TourConfig } from "../config/schema";
 import type { LookControls } from "../controls/LookControls";
 import type { HotspotLayer } from "../interaction/HotspotLayer";
 import type { InteractionManager, SceneHit } from "../interaction/InteractionManager";
-import type { AuthorLinkHandle, NavigationManager } from "../navigation/NavigationManager";
-import type { PanoramaProjection } from "../rendering/PanoramaMaterial";
+import type {
+  AuthorLinkHandle,
+  AuthorWaypointHandle,
+  NavigationManager,
+} from "../navigation/NavigationManager";
+import type { PanoramaDebugView, PanoramaProjection } from "../rendering/PanoramaMaterial";
+import { createTransitionPath } from "../navigation/TransitionPath";
 
 export interface AuthorModeContext {
   config: TourConfig;
@@ -26,18 +32,24 @@ export interface AuthorModeContext {
   projection: PanoramaProjection;
   proxyRoot: Object3D | null;
   proxyMeshes: Mesh[];
+  scene: Scene;
+  visibilityRoot: Object3D | null;
+  bridgeRoot: Object3D | null;
 }
 
 type ClickMode = "inspect" | "hotspot" | "link";
 type DragTarget =
   | { kind: "hotspot"; hotspot: HotspotConfig }
-  | { kind: "link"; handle: AuthorLinkHandle };
+  | { kind: "link"; handle: AuthorLinkHandle }
+  | { kind: "waypoint"; handle: AuthorWaypointHandle };
 
 const PANEL_CSS = [
   "position:absolute",
   "top:12px",
   "right:12px",
   "width:240px",
+  "max-height:calc(100% - 48px)",
+  "overflow:auto",
   "background:rgba(14,14,18,0.92)",
   "color:#ddd",
   "font:12px/1.6 ui-monospace,Menlo,monospace",
@@ -63,6 +75,8 @@ export class AuthorMode {
   private clickMode: ClickMode = "inspect";
   private wireframes: Mesh[] = [];
   private wireframeMaterial: MeshBasicMaterial | null = null;
+  private diagnosticClones = new Map<string, Object3D>();
+  private diagnosticMaterials: MeshBasicMaterial[] = [];
   private lastHitText: HTMLElement;
   private viewText: HTMLElement;
   private yawText: HTMLElement;
@@ -71,6 +85,7 @@ export class AuthorMode {
   private abort = new AbortController();
   private dragging: DragTarget | null = null;
   private dragRaycaster = new Raycaster();
+  private transitionSlider: HTMLInputElement | null = null;
 
   constructor(ctx: AuthorModeContext) {
     this.ctx = ctx;
@@ -84,6 +99,7 @@ export class AuthorMode {
     this.linkTargetSelect = document.createElement("select");
 
     this.buildPanel();
+    this.ctx.navigation.setAuthorPathsVisible(true);
     ctx.overlay.appendChild(this.panel);
     ctx.interaction.onSceneClick = (hit) => this.onSceneClick(hit);
 
@@ -125,6 +141,28 @@ export class AuthorMode {
     wireRow.appendChild(wireBox);
     wireRow.appendChild(this.el("span", "Show proxy wireframe"));
     this.panel.appendChild(wireRow);
+
+    this.addDiagnosticWireToggle(
+      "Show visibility wireframe",
+      "visibility",
+      this.ctx.visibilityRoot,
+      0x4ea5ff,
+    );
+    this.addDiagnosticWireToggle("Show bridge wireframe", "bridge", this.ctx.bridgeRoot, 0xff4edb);
+
+    const pathRow = this.el("label", "", "display:flex;gap:6px;align-items:center;cursor:pointer");
+    const pathBox = document.createElement("input");
+    pathBox.type = "checkbox";
+    pathBox.checked = true;
+    pathBox.addEventListener(
+      "change",
+      () => this.ctx.navigation.setAuthorPathsVisible(pathBox.checked),
+      { signal: this.abort.signal },
+    );
+    pathRow.append(pathBox, this.el("span", "Show authored paths"));
+    this.panel.appendChild(pathRow);
+
+    this.buildTransitionDiagnostics();
 
     // Click mode
     const modeRow = this.el("div", "", "margin-top:8px;display:flex;gap:4px;flex-wrap:wrap");
@@ -201,6 +239,148 @@ export class AuthorMode {
       "margin-top:8px;color:#888",
     );
     this.panel.appendChild(hint);
+  }
+
+  private buildTransitionDiagnostics(): void {
+    const heading = this.el(
+      "div",
+      "Transition diagnostics",
+      "margin-top:10px;font-weight:700;color:#fff",
+    );
+    this.panel.appendChild(heading);
+
+    const select = document.createElement("select");
+    select.style.cssText = `${BUTTON_CSS};width:100%;margin-top:4px`;
+    const views: Array<[PanoramaDebugView, string]> = [
+      ["normal", "Normal blend"],
+      ["source-a", "Projected source A"],
+      ["source-b", "Projected source B"],
+      ["blend", "A/B weighted blend"],
+      ["visibility-a", "Source-A visibility"],
+      ["visibility-b", "Source-B visibility"],
+      ["rejected-both", "Rejected by both"],
+    ];
+    for (const [value, label] of views) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    }
+    select.addEventListener(
+      "change",
+      () => this.ctx.projection.setDebugView(select.value as PanoramaDebugView),
+      { signal: this.abort.signal },
+    );
+    this.panel.appendChild(select);
+
+    const sliderRow = this.el("div", "", "display:flex;gap:6px;align-items:center;margin-top:6px");
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "1";
+    slider.step = "0.001";
+    slider.value = "0";
+    slider.style.flex = "1";
+    slider.addEventListener(
+      "input",
+      () => this.ctx.navigation.setTransitionProgress(Number(slider.value), true),
+      { signal: this.abort.signal },
+    );
+    this.transitionSlider = slider;
+    sliderRow.append(
+      slider,
+      this.button("Resume", () => this.ctx.navigation.resumeTransition()),
+    );
+    this.panel.appendChild(sliderRow);
+    this.panel.appendChild(this.button("Check path clearance", () => this.checkPathClearance()));
+  }
+
+  private addDiagnosticWireToggle(
+    label: string,
+    key: string,
+    root: Object3D | null,
+    color: number,
+  ): void {
+    if (!root) return;
+    const row = this.el("label", "", "display:flex;gap:6px;align-items:center;cursor:pointer");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.addEventListener(
+      "change",
+      () => this.setDiagnosticWireframe(key, root, color, box.checked),
+      {
+        signal: this.abort.signal,
+      },
+    );
+    row.append(box, this.el("span", label));
+    this.panel.appendChild(row);
+  }
+
+  private setDiagnosticWireframe(
+    key: string,
+    source: Object3D,
+    color: number,
+    visible: boolean,
+  ): void {
+    let clone = this.diagnosticClones.get(key);
+    if (!clone) {
+      const material = new MeshBasicMaterial({
+        color,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      this.diagnosticMaterials.push(material);
+      clone = source.clone(true);
+      clone.name = `meshtour_diagnostic_${key}`;
+      clone.traverse((object) => {
+        if (!(object as Mesh).isMesh) return;
+        (object as Mesh).material = material;
+        object.raycast = () => {};
+        (object as Mesh).renderOrder = 7;
+      });
+      this.ctx.scene.add(clone);
+      this.diagnosticClones.set(key, clone);
+    }
+    clone.visible = visible;
+  }
+
+  private checkPathClearance(): void {
+    let blocked = 0;
+    let checked = 0;
+    const raycaster = new Raycaster();
+    raycaster.firstHitOnly = true;
+    for (const from of this.ctx.config.nodes) {
+      for (const link of from.links) {
+        if (!link.path) continue;
+        checked += 1;
+        const to = this.ctx.config.nodes.find((node) => node.id === link.to)!;
+        const path = createTransitionPath(from.position, to.position, link.path.waypoints);
+        let previous = path.getPointAt(0);
+        let intersects = false;
+        for (let index = 1; index <= 64; index += 1) {
+          const next = path.getPointAt(index / 64);
+          const direction = next.clone().sub(previous);
+          const distance = direction.length();
+          if (distance > 1e-6) {
+            raycaster.set(previous, direction.normalize());
+            raycaster.near = 0.025;
+            raycaster.far = Math.max(0.025, distance - 0.025);
+            if (raycaster.intersectObjects(this.ctx.proxyMeshes, false).length > 0) {
+              intersects = true;
+              break;
+            }
+          }
+          previous = next;
+        }
+        if (intersects) blocked += 1;
+      }
+    }
+    this.lastHitText.textContent =
+      checked === 0
+        ? "No authored paths to check."
+        : `${blocked}/${checked} authored paths intersect proxy geometry.`;
   }
 
   private refreshLinkTargets(): void {
@@ -285,6 +465,11 @@ export class AuthorMode {
     }
 
     const link = this.linkNearPointer(event, currentNode);
+    const waypoint = this.waypointNearPointer(event, currentNode);
+    if (waypoint) {
+      this.startDrag(event, { kind: "waypoint", handle: waypoint });
+      return;
+    }
     if (link) {
       this.startDrag(event, { kind: "link", handle: link });
     }
@@ -311,6 +496,27 @@ export class AuthorMode {
       const y = rect.top + ((1 - point.y) / 2) * rect.height;
       const distance = Math.hypot(event.clientX - x, event.clientY - y);
       if (distance <= 32 && (!closest || distance < closest.distance)) {
+        closest = { handle, distance };
+      }
+    }
+    return closest?.handle ?? null;
+  }
+
+  private waypointNearPointer(
+    event: PointerEvent,
+    currentNode: string | null,
+  ): AuthorWaypointHandle | null {
+    const rect = this.ctx.canvas.getBoundingClientRect();
+    this.ctx.camera.updateMatrixWorld();
+    let closest: { handle: AuthorWaypointHandle; distance: number } | null = null;
+    for (const handle of this.ctx.navigation.getAuthorWaypointHandles()) {
+      if (handle.fromNodeId !== currentNode || !handle.mesh.visible) continue;
+      const point = handle.mesh.getWorldPosition(new Vector3()).project(this.ctx.camera);
+      if (point.z < -1 || point.z > 1) continue;
+      const x = rect.left + ((point.x + 1) / 2) * rect.width;
+      const y = rect.top + ((1 - point.y) / 2) * rect.height;
+      const distance = Math.hypot(event.clientX - x, event.clientY - y);
+      if (distance <= 24 && (!closest || distance < closest.distance)) {
         closest = { handle, distance };
       }
     }
@@ -344,8 +550,15 @@ export class AuthorMode {
       if (this.dragging.kind === "hotspot") {
         this.dragging.hotspot.position = position;
         this.ctx.hotspots.updatePosition(this.dragging.hotspot.id, position);
-      } else {
+      } else if (this.dragging.kind === "link") {
         this.ctx.navigation.updateLinkPosition(this.dragging.handle.link, position);
+      } else {
+        const current = this.dragging.handle.link.path!.waypoints[this.dragging.handle.index]!;
+        this.ctx.navigation.updateWaypointPosition(this.dragging.handle, [
+          position[0],
+          current[1],
+          position[2],
+        ]);
       }
     }
   };
@@ -356,9 +569,15 @@ export class AuthorMode {
     const label =
       target.kind === "hotspot"
         ? target.hotspot.id
-        : `link ${target.handle.fromNodeId} → ${target.handle.link.to}`;
+        : target.kind === "link"
+          ? `link ${target.handle.fromNodeId} → ${target.handle.link.to}`
+          : `waypoint ${target.handle.index + 1} on ${target.handle.fromNodeId} → ${target.handle.link.to}`;
     const position =
-      target.kind === "hotspot" ? target.hotspot.position : target.handle.link.position;
+      target.kind === "hotspot"
+        ? target.hotspot.position
+        : target.kind === "link"
+          ? target.handle.link.position
+          : target.handle.link.path!.waypoints[target.handle.index]!;
     this.lastHitText.textContent = `moved ${label} @ ${JSON.stringify(position)}`;
     this.dragging = null;
     this.ctx.controls.enabled = true;
@@ -396,6 +615,10 @@ export class AuthorMode {
     const nodeId = this.ctx.navigation.getCurrentNodeId();
     const node = nodeId ? this.ctx.config.nodes.find((n) => n.id === nodeId) : null;
     this.yawText.textContent = node ? ` ${((node.panorama.yaw * 180) / Math.PI).toFixed(2)}°` : "";
+    const snapshot = this.ctx.navigation.getTransitionSnapshot();
+    if (snapshot && this.transitionSlider !== document.activeElement) {
+      this.transitionSlider!.value = String(snapshot.progress);
+    }
   }
 
   dispose(): void {
@@ -404,6 +627,12 @@ export class AuthorMode {
     for (const wire of this.wireframes) wire.removeFromParent();
     this.wireframes = [];
     this.wireframeMaterial?.dispose();
+    this.ctx.navigation.setAuthorPathsVisible(false);
+    this.ctx.projection.setDebugView("normal");
+    for (const clone of this.diagnosticClones.values()) clone.removeFromParent();
+    this.diagnosticClones.clear();
+    for (const material of this.diagnosticMaterials) material.dispose();
+    this.diagnosticMaterials = [];
     this.ctx.interaction.onSceneClick = null;
     this.ctx.controls.enabled = true;
   }

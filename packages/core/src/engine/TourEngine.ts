@@ -29,6 +29,7 @@ import { NavigationManager, type TransitionOptions } from "../navigation/Navigat
 import { PanoramaProjection } from "../rendering/PanoramaMaterial";
 import { PanoramaVisibilityMap } from "../rendering/PanoramaVisibilityMap";
 import { MeasurementLayer } from "../spatial/MeasurementLayer";
+import { smoothstep } from "../utils/math";
 import {
   renderProxyPlan,
   resolvePlanBounds,
@@ -91,6 +92,10 @@ export class TourEngine {
   private measurements: MeasurementLayer | null = null;
   private config: TourConfig | null = null;
   private proxyRoot: Object3D | null = null;
+  private visibilityRoot: Object3D | null = null;
+  private bridgeRoot: Object3D | null = null;
+  private bridgeMaterials: Array<{ material: MeshBasicMaterial; opacity: number }> = [];
+  private bridgeFallbackReason: string | null = null;
   private proxyMeshes: Mesh[] = [];
   private overviewMaterial: Material | null = null;
   private panoramaMaterials = new Map<Mesh, Material | Material[]>();
@@ -106,6 +111,7 @@ export class TourEngine {
   private resizeObserver: ResizeObserver;
   private animationFrame = 0;
   private lastTime = 0;
+  private lastFrameMs = 0;
   private disposed = false;
   private internalState: TourEngineState = "idle";
   private viewMode: TourViewMode = "panorama";
@@ -144,6 +150,32 @@ export class TourEngine {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.container);
     this.resize();
+
+    // Deliberately symbol-keyed and absent from package exports: visual tests
+    // can freeze a transition deterministically without expanding the public API.
+    Object.defineProperty(this, Symbol.for("meshtour.transitionTestClock"), {
+      configurable: false,
+      enumerable: false,
+      value: {
+        setProgress: (progress: number) =>
+          this.navigation?.setTransitionProgress(progress) ?? false,
+        complete: () => this.navigation?.completeFrozenTransition() ?? false,
+        resume: () => this.navigation?.resumeTransition(),
+        snapshot: () => {
+          const transition = this.navigation?.getTransitionSnapshot() ?? null;
+          if (!transition) return null;
+          return {
+            ...transition,
+            renderer: this.renderer.capabilities.isWebGL2 ? "webgl2" : "webgl1",
+            devicePixelRatio: this.renderer.getPixelRatio(),
+            frameTimeMs: this.lastFrameMs,
+            gpuTextures: this.renderer.info.memory.textures,
+            gpuGeometries: this.renderer.info.memory.geometries,
+          };
+        },
+        renderFrame: () => this.renderer.render(this.scene, this.getActiveCamera()),
+      },
+    });
   }
 
   get state(): TourEngineState {
@@ -199,13 +231,25 @@ export class TourEngine {
 
       const startNode = this.options.initialNode ?? config.start ?? config.nodes[0]!.id;
       this.events.emit("loadprogress", { progress: 0.15 });
-      const [proxyRoot] = await Promise.all([
+      const [proxyRoot, , visibilityRoot, bridgeRoot] = await Promise.all([
         this.options.proxyMesh ?? this.assets.loadProxyMesh(),
         // Mesh decoding and the first panorama are independent. Loading them
         // together removes an avoidable network/decode waterfall on cold starts.
         this.assets.ensureBest(startNode),
+        this.assets.loadVisibilityMesh().catch((error) => {
+          console.warn(
+            `MeshTour could not load transition visibility mesh; using interaction proxy: ${String(error)}`,
+          );
+          return null;
+        }),
+        this.assets.loadBridgeMesh().catch((error) => {
+          this.bridgeFallbackReason = `bridge asset failed to load (${String(error)})`;
+          return null;
+        }),
       ]);
       this.proxyRoot = proxyRoot;
+      this.visibilityRoot = visibilityRoot;
+      this.bridgeRoot = bridgeRoot;
       this.ensureActive();
       this.events.emit("loadprogress", { progress: 0.5 });
       this.ensureCeiling(config);
@@ -213,7 +257,11 @@ export class TourEngine {
       if (config.configurables.length > 0) {
         this.variants = new VariantManager(config, this.assets, this.projection, this.proxyRoot);
       }
-      this.visibility = new PanoramaVisibilityMap(this.renderer, this.proxyRoot);
+      this.visibility = new PanoramaVisibilityMap(
+        this.renderer,
+        this.visibilityRoot ?? this.proxyRoot,
+      );
+      if (this.bridgeRoot) this.setupBridge(this.bridgeRoot);
       this.setupSkysphere();
 
       this.interaction = new InteractionManager(
@@ -255,6 +303,10 @@ export class TourEngine {
         this.variants?.prepareSlot(slot, nodeId) ?? Promise.resolve();
       this.navigation.onPromoteProjectionSlots = () => this.variants?.promoteBToA();
       this.navigation.onNavigateRequested = (nodeId) => void this.goToNode(nodeId);
+      this.navigation.onPrepareTransition = () => this.prepareBridge();
+      this.navigation.onTransitionProgress = (progress, active) =>
+        this.updateBridge(progress, active);
+      this.navigation.setWalkFallback(this.bridgeFallbackReason);
 
       const worldBounds = new Box3().setFromObject(this.proxyRoot);
       const planBounds = resolvePlanBounds(this.proxyRoot, config.spatial.overview.bounds);
@@ -422,6 +474,64 @@ export class TourEngine {
     this.scene.add(this.skysphere);
   }
 
+  private setupBridge(root: Object3D): void {
+    this.bridgeMaterials = [];
+    root.name ||= "meshtour_bridge";
+    root.traverse((object) => {
+      if (!(object as Mesh).isMesh) return;
+      const mesh = object as Mesh;
+      const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const bridgeMaterials = sourceMaterials.map((source) => {
+        const candidate = source as MeshBasicMaterial;
+        const opacity = candidate.opacity ?? 1;
+        const material = new MeshBasicMaterial({
+          color: candidate.color ?? 0xffffff,
+          map: candidate.map ?? null,
+          lightMap: candidate.lightMap ?? null,
+          lightMapIntensity: candidate.lightMapIntensity ?? 1,
+          aoMap: candidate.aoMap ?? null,
+          aoMapIntensity: candidate.aoMapIntensity ?? 1,
+          alphaMap: candidate.alphaMap ?? null,
+          alphaTest: candidate.alphaTest ?? 0,
+          side: candidate.side,
+          transparent: true,
+          opacity: 0,
+          depthTest: true,
+          depthWrite: false,
+        });
+        source.dispose();
+        this.bridgeMaterials.push({ material, opacity });
+        return material;
+      });
+      mesh.material = Array.isArray(mesh.material) ? bridgeMaterials : bridgeMaterials[0]!;
+      mesh.renderOrder = -0.5;
+      mesh.raycast = () => {};
+    });
+    root.visible = false;
+    this.scene.add(root);
+  }
+
+  private prepareBridge(): void {
+    if (!this.bridgeRoot || !this.assets) return;
+    this.bridgeRoot.visible = true;
+    for (const entry of this.bridgeMaterials) entry.material.opacity = 0;
+    this.assets.preuploadObject(this.bridgeRoot);
+    // Compile while transition preparation is still allowed to block.
+    this.renderer.compile(this.scene, this.camera);
+    this.bridgeRoot.visible = false;
+  }
+
+  private updateBridge(progress: number, active: boolean): void {
+    if (!this.bridgeRoot) return;
+    const opacity = active
+      ? Math.min(smoothstep(0, 0.12, progress), 1 - smoothstep(0.88, 1, progress))
+      : 0;
+    for (const entry of this.bridgeMaterials) {
+      entry.material.opacity = opacity * entry.opacity;
+    }
+    this.bridgeRoot.visible = active && opacity > 0;
+  }
+
   private onArrive(nodeId: string): void {
     if (!this.config || !this.assets || !this.hotspots) return;
     for (const { nodeId, previous, next } of this.pendingTextureUpgrades) {
@@ -448,6 +558,7 @@ export class TourEngine {
     this.animationFrame = requestAnimationFrame(this.loop);
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastTime) / 1000);
+    this.lastFrameMs = now - this.lastTime;
     this.lastTime = now;
 
     const viewMoved = this.controls.update(dt);
@@ -639,6 +750,9 @@ export class TourEngine {
         projection: this.projection,
         proxyRoot: this.proxyRoot,
         proxyMeshes: this.proxyMeshes,
+        scene: this.scene,
+        visibilityRoot: this.visibilityRoot ?? this.proxyRoot,
+        bridgeRoot: this.bridgeRoot,
       });
     } else if (!enabled && this.authorOverlay) {
       this.authorOverlay.dispose();

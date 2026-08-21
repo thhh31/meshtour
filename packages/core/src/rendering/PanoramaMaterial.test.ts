@@ -39,13 +39,21 @@ describe("PanoramaProjection texture upgrades", () => {
     const arriving = new Texture();
     const depthA = new CubeTexture();
     const depthB = new CubeTexture();
-    projection.setSlotA(departing, new Vector3(), 0, depthA);
-    projection.setSlotB(arriving, new Vector3(1, 0, 0), 0.4, depthB);
+    projection.setSlotA(departing, new Vector3(), 0, depthA, { exposure: -0.5 });
+    projection.setSlotB(arriving, new Vector3(1, 0, 0), 0.4, depthB, {
+      exposure: 0.25,
+      color: [0.9, 1, 1.1],
+    });
 
     projection.promoteBToA();
 
     expect(projection.uniforms.uPanoA.value).toBe(arriving);
     expect(projection.uniforms.uDepthA.value).toBe(depthB);
     expect(projection.uniforms.uHasDepthA.value).toBe(1);
+    expect(projection.uniforms.uExposureA.value).toBe(0.25);
+    expect(projection.uniforms.uColorA.value.toArray()).toEqual([0.9, 1, 1.1]);
+    expect(projection.uniforms.uPanoB.value).toBeNull();
+    expect(projection.uniforms.uDepthB.value).toBeNull();
+    expect(projection.uniforms.uHasB.value).toBe(0);
   });
 });

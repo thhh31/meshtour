@@ -1,7 +1,10 @@
 import {
   ClampToEdgeWrapping,
+  CubeTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
+  NearestFilter,
+  NoColorSpace,
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
@@ -14,6 +17,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { resolveAssetUrl } from "../config/loader";
 import type { NodeConfig, TourConfig } from "../config/schema";
+import { PANORAMA_DEPTH_FAR, PANORAMA_DEPTH_NEAR } from "../rendering/PanoramaVisibilityMap";
 
 export interface AssetManagerOptions {
   /** Path to the Draco decoder files. */
@@ -33,6 +37,11 @@ interface NodeTextures {
   released?: boolean;
 }
 
+interface DepthTextureEntry {
+  texture?: CubeTexture;
+  promise?: Promise<CubeTexture>;
+}
+
 /**
  * Loads the proxy mesh (glTF + Draco) and panorama textures with a simple
  * priority scheme: current node preview first, then current full res, then
@@ -47,7 +56,10 @@ export class AssetManager {
   private nodeTextures = new Map<string, NodeTextures>();
   private layerTextures = new Map<string, { texture?: Texture; promise?: Promise<Texture> }>();
   private auxiliaryTextures = new Map<string, { texture?: Texture; promise?: Promise<Texture> }>();
+  private depthTextures = new Map<string, DepthTextureEntry>();
+  private loadedObjects = new Set<Object3D>();
   private maxAnisotropy: number;
+  private disposed = false;
 
   /** Called when a full-res texture finishes loading after the preview was already shown. */
   onTextureUpgraded: ((nodeId: string, previous: Texture, next: Texture) => void) | null = null;
@@ -59,29 +71,48 @@ export class AssetManager {
     this.maxAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   }
 
-  async loadProxyMesh(): Promise<Object3D> {
-    const mesh = this.config.assets.mesh;
-    if (!mesh) {
-      throw new Error(
-        "Tour config has no assets.mesh and no proxyMesh object was provided to the engine",
-      );
-    }
+  private async loadMeshAsset(asset: { url: string; draco: boolean }): Promise<Object3D> {
+    if (this.disposed) throw new Error("AssetManager is disposed");
     const loader = new GLTFLoader();
+    loader.setKTX2Loader(this.getKtx2Loader());
     let draco: DRACOLoader | null = null;
-    if (mesh.draco) {
+    if (asset.draco) {
       draco = new DRACOLoader();
       draco.setDecoderPath(this.options.dracoDecoderPath ?? DEFAULT_DRACO_PATH);
-      // Fetch and initialise the decoder alongside the glTF request instead of
-      // waiting for the compressed mesh download to finish first.
       draco.preload();
       loader.setDRACOLoader(draco);
     }
     try {
-      const gltf = await loader.loadAsync(resolveAssetUrl(this.config, mesh.url));
+      const gltf = await loader.loadAsync(resolveAssetUrl(this.config, asset.url));
+      if (this.disposed) {
+        this.disposeObject(gltf.scene);
+        throw new Error(`Mesh load for released URL "${asset.url}" was discarded`);
+      }
+      this.loadedObjects.add(gltf.scene);
       return gltf.scene;
     } finally {
       draco?.dispose();
     }
+  }
+
+  async loadProxyMesh(): Promise<Object3D> {
+    const asset = this.config.assets.mesh;
+    if (!asset) {
+      throw new Error(
+        "Tour config has no assets.mesh and no proxyMesh object was provided to the engine",
+      );
+    }
+    return this.loadMeshAsset(asset);
+  }
+
+  async loadVisibilityMesh(): Promise<Object3D | null> {
+    const asset = this.config.assets.visibilityMesh;
+    return asset ? this.loadMeshAsset(asset) : null;
+  }
+
+  async loadBridgeMesh(): Promise<Object3D | null> {
+    const asset = this.config.assets.bridge;
+    return asset ? this.loadMeshAsset(asset) : null;
   }
 
   private node(nodeId: string): NodeConfig {
@@ -108,12 +139,7 @@ export class AssetManager {
   private async loadTexture(url: string): Promise<Texture> {
     let texture: Texture;
     if (/\.ktx2($|\?)/i.test(url)) {
-      if (!this.ktx2Loader) {
-        this.ktx2Loader = new KTX2Loader()
-          .setTranscoderPath(this.options.ktx2TranscoderPath ?? DEFAULT_KTX2_PATH)
-          .detectSupport(this.renderer);
-      }
-      texture = await this.ktx2Loader.loadAsync(url);
+      texture = await this.getKtx2Loader().loadAsync(url);
       texture.minFilter = texture.mipmaps.length > 1 ? LinearMipmapLinearFilter : LinearFilter;
     } else {
       texture = await this.textureLoader.loadAsync(url);
@@ -127,6 +153,92 @@ export class AssetManager {
     texture.magFilter = LinearFilter;
     texture.anisotropy = this.maxAnisotropy;
     return texture;
+  }
+
+  private getKtx2Loader(): KTX2Loader {
+    if (!this.ktx2Loader) {
+      this.ktx2Loader = new KTX2Loader()
+        .setTranscoderPath(this.options.ktx2TranscoderPath ?? DEFAULT_KTX2_PATH)
+        .detectSupport(this.renderer);
+    }
+    return this.ktx2Loader;
+  }
+
+  /**
+   * Load validated, GPU-ready offline radial depth. Missing metadata means the
+   * caller should use runtime visibility capture.
+   */
+  ensureDepth(nodeId: string): Promise<CubeTexture | null> {
+    const metadata = this.node(nodeId).depth;
+    if (!metadata) return Promise.resolve(null);
+    const resolved = resolveAssetUrl(this.config, metadata.url);
+    if (
+      Math.abs(metadata.near - PANORAMA_DEPTH_NEAR) > 1e-9 ||
+      Math.abs(metadata.far - PANORAMA_DEPTH_FAR) > 1e-9
+    ) {
+      return Promise.reject(
+        new Error(
+          `Radial depth for node "${nodeId}" at "${resolved}" uses near/far ` +
+            `${metadata.near}/${metadata.far}; expected ${PANORAMA_DEPTH_NEAR}/${PANORAMA_DEPTH_FAR}`,
+        ),
+      );
+    }
+    if (!/\.ktx2($|\?)/i.test(resolved)) {
+      return Promise.reject(
+        new Error(`Radial depth for node "${nodeId}" at "${resolved}" must be a KTX2 cubemap`),
+      );
+    }
+
+    let entry = this.depthTextures.get(nodeId);
+    if (!entry) {
+      entry = {};
+      this.depthTextures.set(nodeId, entry);
+    }
+    if (entry.texture) return Promise.resolve(entry.texture);
+    if (!entry.promise) {
+      const currentEntry = entry;
+      entry.promise = this.getKtx2Loader()
+        .loadAsync(resolved)
+        .then(
+          (loaded) => {
+            const texture = loaded as unknown as CubeTexture;
+            if (!texture.isCubeTexture) {
+              loaded.dispose();
+              throw new Error(
+                `Radial depth for node "${nodeId}" at "${resolved}" is not a cubemap texture`,
+              );
+            }
+            const faces = texture.image as unknown as Array<{ width?: number; height?: number }>;
+            if (
+              !Array.isArray(faces) ||
+              faces.length !== 6 ||
+              faces.some((face) => face.width !== metadata.size || face.height !== metadata.size)
+            ) {
+              texture.dispose();
+              throw new Error(
+                `Radial depth for node "${nodeId}" at "${resolved}" does not match declared ` +
+                  `${metadata.size}x${metadata.size} cubemap faces`,
+              );
+            }
+            if (this.disposed || this.depthTextures.get(nodeId) !== currentEntry) {
+              texture.dispose();
+              throw new Error(`Radial depth load for released node "${nodeId}" was discarded`);
+            }
+            texture.colorSpace = NoColorSpace;
+            texture.minFilter = NearestFilter;
+            texture.magFilter = NearestFilter;
+            texture.generateMipmaps = false;
+            texture.name = `meshtour-offline-visibility-${nodeId}`;
+            currentEntry.texture = texture;
+            return texture;
+          },
+          (error) => {
+            this.depthTextures.delete(nodeId);
+            throw error;
+          },
+        );
+    }
+    return entry.promise;
   }
 
   /** Load and cache a transparent panorama-aligned configurable-object layer. */
@@ -286,6 +398,20 @@ export class AssetManager {
     this.renderer.initTexture(texture);
   }
 
+  /** Upload all texture dependencies of a GLB before a transition begins. */
+  preuploadObject(root: Object3D): void {
+    root.traverse((object) => {
+      const material = (object as Object3D & { material?: unknown }).material;
+      const materials = Array.isArray(material) ? material : material ? [material] : [];
+      for (const entry of materials) {
+        if (!entry || typeof entry !== "object") continue;
+        for (const value of Object.values(entry)) {
+          if ((value as Texture | undefined)?.isTexture) this.preupload(value as Texture);
+        }
+      }
+    });
+  }
+
   /** Background-prefetch panoramas reachable through shared and node-specific links. */
   prefetchNeighbors(nodeId: string): void {
     for (const link of [...this.config.links, ...this.node(nodeId).links]) {
@@ -303,15 +429,53 @@ export class AssetManager {
       entry.full?.dispose();
       this.nodeTextures.delete(nodeId);
     }
+    for (const [nodeId, entry] of this.depthTextures) {
+      if (keep.has(nodeId)) continue;
+      entry.texture?.dispose();
+      this.depthTextures.delete(nodeId);
+    }
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.releaseExcept(new Set());
     for (const entry of this.layerTextures.values()) entry.texture?.dispose();
     this.layerTextures.clear();
     for (const entry of this.auxiliaryTextures.values()) entry.texture?.dispose();
     this.auxiliaryTextures.clear();
+    for (const root of this.loadedObjects) this.disposeObject(root);
+    this.loadedObjects.clear();
     this.ktx2Loader?.dispose();
     this.ktx2Loader = null;
+  }
+
+  private disposeObject(root: Object3D): void {
+    const textures = new Set<Texture>();
+    const materials = new Set<{ dispose(): void }>();
+    const geometries = new Set<{ dispose(): void }>();
+    root.traverse((object) => {
+      const renderable = object as Object3D & {
+        geometry?: { dispose(): void };
+        material?: unknown;
+      };
+      if (renderable.geometry) geometries.add(renderable.geometry);
+      const objectMaterials = Array.isArray(renderable.material)
+        ? renderable.material
+        : renderable.material
+          ? [renderable.material]
+          : [];
+      for (const material of objectMaterials) {
+        if (!material || typeof material !== "object") continue;
+        if ("dispose" in material) materials.add(material as { dispose(): void });
+        for (const value of Object.values(material)) {
+          if ((value as Texture | undefined)?.isTexture) textures.add(value as Texture);
+        }
+      }
+    });
+    for (const texture of textures) texture.dispose();
+    for (const material of materials) material.dispose();
+    for (const geometry of geometries) geometry.dispose();
+    root.removeFromParent();
   }
 }
