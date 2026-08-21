@@ -158,12 +158,12 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
 
 ### `rendering`
 
-| Field           | Type                 | Default     | Notes                                                                                                                                                                                                                |
-| --------------- | -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `previewSuffix` | string               | –           | Appended to `panorama.url` for the low-res image loaded first (e.g. `"_1k.jpg"`).                                                                                                                                    |
-| `fullSuffix`    | string               | –           | Appended for the full-res image (e.g. `"_8k.ktx2"`). Two distinct suffixes enable progressive loading. If only one suffix is present, it is the sole quality; if neither is present, `panorama.url` is loaded as-is. |
-| `background`    | string               | `"#0b0b0e"` | Clear color / fallback.                                                                                                                                                                                              |
-| `transition`    | `"walk"` \| `"fade"` | `"walk"`    | `walk` reprojects panoramas during camera travel; `fade` hides travel between two clean, stationary views and is safer for sparse or approximate proxies.                                                            |
+| Field           | Type                 | Default     | Notes                                                                                                                                                                                                                           |
+| --------------- | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `previewSuffix` | string               | –           | Appended to `panorama.url` for the low-res image loaded first (e.g. `"_1k.jpg"`).                                                                                                                                               |
+| `fullSuffix`    | string               | –           | Appended for the full-res image (e.g. `"_8k.ktx2"`). Two distinct suffixes enable progressive loading. If only one suffix is present, it is the sole quality; if neither is present, `panorama.url` is loaded as-is.            |
+| `background`    | string               | `"#0b0b0e"` | Clear color / fallback.                                                                                                                                                                                                         |
+| `transition`    | `"walk"` \| `"fade"` | `"walk"`    | `walk` reprojects panoramas during camera travel and uses a krpano-style half-second texture blend around the midpoint; `fade` hides travel between two clean, stationary views and is safer for sparse or approximate proxies. |
 
 ### `interactables`
 

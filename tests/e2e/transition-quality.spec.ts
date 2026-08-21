@@ -1,6 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-const PROGRESS = [0, 0.15, 0.3, 0.42, 0.5, 0.58, 0.7, 0.85, 1] as const;
+const PROGRESS = [0, 0.15, 0.29, 0.4, 0.5, 0.6, 0.71, 0.85, 1] as const;
 const EDGE_FILTER = process.env.TRANSITION_EDGE;
 
 interface TestClockSnapshot {

@@ -15,6 +15,7 @@
     "assets:build:v2": "node scripts/build-italian-flat-v2.mjs",
     "assets:verify:v2": "node scripts/verify-italian-flat-v2.mjs",
     "assets:verify:v3": "node scripts/verify-italian-flat-v3.mjs",
+    "assets:repair:rug": "node scripts/repair-italian-flat-rug.mjs",
     "packages:verify": "node scripts/verify-package-consumers.mjs",
     "demo:record": "node scripts/record-demo.mjs",
     "typecheck": "pnpm -r typecheck",

@@ -11,8 +11,8 @@
   "blenderVersion": "5.2.0 LTS",
   "proxy": {
     "objects": 33,
-    "polygons": 17388,
-    "bytes": 283796
+    "polygons": 38604,
+    "bytes": 284720
   },
   "files": [
     {
@@ -107,8 +107,8 @@
     },
     {
       "path": "mesh/apartment.glb",
-      "bytes": 283796,
-      "sha256": "0d7c3b6535c464e0913fcd5010b632e2147d22bfa0640437dc9f3f91bcf519ea"
+      "bytes": 284720,
+      "sha256": "37f591f9c79e27fc463762189a7c3b1d2c12e223a9fa72ee8d8172202e63795f"
     },
     {
       "path": "overview/top.jpg",

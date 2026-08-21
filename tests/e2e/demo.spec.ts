@@ -84,14 +84,25 @@ test("loads Italian Flat v2 with dedicated visibility and furniture-safe paths",
         symbol,
         {
           setProgress(progress: number): boolean;
-          snapshot(): { camera: [number, number, number] } | null;
+          snapshot(): { camera: [number, number, number]; blend: number } | null;
         }
       >
     )[Symbol.for("meshtour.transitionTestClock")];
-    if (!clock?.setProgress(0.5)) throw new Error("Transition clock unavailable");
-    return clock.snapshot()!.camera;
+    if (!clock?.setProgress(0.4)) throw new Error("Transition clock unavailable");
+    const earlyBlend = clock.snapshot()!.blend;
+    clock.setProgress(0.5);
+    return {
+      ...clock.snapshot()!,
+      earlyBlend,
+      curtainOpacity: Number(
+        getComputedStyle(document.querySelector(".meshtour-transition-curtain")!).opacity,
+      ),
+    };
   });
-  expect(midpoint[0]).toBeLessThan(1.5);
+  expect(midpoint.camera[0]).toBeLessThan(1.5);
+  expect(midpoint.earlyBlend).toBeGreaterThan(0);
+  expect(midpoint.blend).toBeCloseTo(0.5);
+  expect(midpoint.curtainOpacity).toBe(0);
 });
 
 test("provides an automatic plan, measurements, textured top view, and fullscreen control", async ({

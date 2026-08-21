@@ -29,6 +29,17 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function parseGlbJson(contents, sourcePath) {
+  assert(contents.subarray(0, 4).toString("ascii") === "glTF", `${sourcePath}: invalid GLB header`);
+  const jsonLength = contents.readUInt32LE(12);
+  return JSON.parse(
+    contents
+      .subarray(20, 20 + jsonLength)
+      .toString("utf8")
+      .trimEnd(),
+  );
+}
+
 const manifest = JSON.parse(await readFile(path.join(tourRoot, "manifest.json"), "utf8"));
 const config = validateConfig(JSON.parse(await readFile(path.join(tourRoot, "tour.json"), "utf8")));
 const actualFiles = await listFiles(tourRoot);
@@ -149,6 +160,17 @@ assert(expectedLinks.size === 0, "Italian Flat is missing a shared navigation li
 const meshPath = config.assets.mesh.url.split(/[?#]/, 1)[0];
 const mesh = await readFile(path.join(tourRoot, meshPath));
 assert(mesh.subarray(0, 4).toString("ascii") === "glTF", `${meshPath}: invalid GLB header`);
+const proxyJson = parseGlbJson(mesh, meshPath);
+const rugMesh = proxyJson.meshes.find((candidate) => candidate.name === "int_rug_mesh");
+assert(
+  rugMesh?.extras?.meshtourRepair === "padded-rug-projection-surface",
+  "Rug projection surface is not repaired",
+);
+assert(
+  proxyJson.accessors[rugMesh.primitives[0].attributes.POSITION].count === 4 &&
+    proxyJson.accessors[rugMesh.primitives[0].indices].count === 6,
+  "Rug projection surface must be a padded two-triangle plane",
+);
 assert(
   (await stat(path.join(tourRoot, meshPath))).size === manifest.proxy.bytes,
   "Proxy size does not match manifest statistics",

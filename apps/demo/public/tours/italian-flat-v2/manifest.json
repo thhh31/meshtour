@@ -5,7 +5,7 @@
   "source": {
     "tour": "../italian-flat",
     "proxy": "../italian-flat/mesh/apartment.glb",
-    "proxySha256": "0d7c3b6535c464e0913fcd5010b632e2147d22bfa0640437dc9f3f91bcf519ea"
+    "proxySha256": "37f591f9c79e27fc463762189a7c3b1d2c12e223a9fa72ee8d8172202e63795f"
   },
   "transitionVisibility": {
     "objects": 32,
@@ -13,7 +13,7 @@
       "int_rug"
     ],
     "bytes": 283952,
-    "sha256": "bd30e0d8bcad6cfceec3bb6febfe87adbe97d006024895cdde03e7e5e6cccdcd"
+    "sha256": "56d1e359ba4e51bb44dbefc0b1becca3f73cf850d541e1f4eb6231864314bcae"
   },
   "capabilities": {
     "dedicatedVisibilityMesh": true,
@@ -115,13 +115,13 @@
     },
     {
       "path": "mesh/apartment.glb",
-      "bytes": 283796,
-      "sha256": "0d7c3b6535c464e0913fcd5010b632e2147d22bfa0640437dc9f3f91bcf519ea"
+      "bytes": 284720,
+      "sha256": "37f591f9c79e27fc463762189a7c3b1d2c12e223a9fa72ee8d8172202e63795f"
     },
     {
       "path": "mesh/transition-visibility.glb",
       "bytes": 283952,
-      "sha256": "bd30e0d8bcad6cfceec3bb6febfe87adbe97d006024895cdde03e7e5e6cccdcd"
+      "sha256": "56d1e359ba4e51bb44dbefc0b1becca3f73cf850d541e1f4eb6231864314bcae"
     },
     {
       "path": "overview/top.jpg",

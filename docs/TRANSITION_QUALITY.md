@@ -22,8 +22,8 @@ surface. The target is to:
 The existing path has four important parts:
 
 1. `NavigationManager` loads and preuploads panorama B, captures its visibility
-   cubemap, moves the camera on a straight line, and changes the global A/B
-   blend over the middle 16% of the transition.
+   cubemap, moves the camera on a straight line, and smoothly crossfades the
+   global A/B textures for about half a second around the midpoint.
 2. `PanoramaMaterial` projects A and B from their capture centers onto the
    shared proxy. It performs a binary radial-depth test for each source.
 3. `PanoramaVisibilityMap` clones the interaction proxy and renders a 256 px
@@ -242,8 +242,8 @@ panorama.
 
 ### Keep the blend curve configurable in code
 
-Retain the present 0.42-0.58 handoff as the baseline. Compare it with wider
-curves only after confidence-weighted blending works. Judge the curve on:
+Retain the present centered 0.5-second, ease-in-out handoff as the baseline.
+Compare other curves only after confidence-weighted blending works. Judge the curve on:
 
 - double exposure;
 - midpoint pop;
@@ -287,9 +287,9 @@ Suggested prototype windows:
 
 ```text
 0.00-0.12  source panorama settles to panorama + bridge
-0.12-0.42  source-dominant projective view with bridge filling gaps
-0.42-0.58  confidence-weighted A/B handoff with bridge filling gaps
-0.58-0.88  destination-dominant projective view with bridge filling gaps
+0.12-0.29  source-dominant projective view with bridge filling gaps
+0.29-0.71  confidence-weighted A/B texture blend with bridge filling gaps
+0.71-0.88  destination-dominant projective view with bridge filling gaps
 0.88-1.00  bridge settles out to the destination panorama
 ```
 

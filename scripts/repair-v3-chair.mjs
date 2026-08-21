@@ -4,7 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const glbPath = path.join(projectRoot, "apps/demo/public/tours/italian-flat-v3/mesh/v3_covered_windows.glb");
+const glbPath = path.join(
+  projectRoot,
+  "apps/demo/public/tours/italian-flat-v3/mesh/v3_covered_windows.glb",
+);
 const manifestPath = path.join(projectRoot, "apps/demo/public/tours/italian-flat-v3/manifest.json");
 
 const sha256 = (contents) => createHash("sha256").update(contents).digest("hex");
@@ -56,7 +59,9 @@ async function repair() {
   const numVerts = posAcc.count;
   const adj = Array.from({ length: numVerts }, () => []);
   for (let i = 0; i < oldIndices.length; i += 3) {
-    const a = oldIndices[i], b = oldIndices[i + 1], c = oldIndices[i + 2];
+    const a = oldIndices[i],
+      b = oldIndices[i + 1],
+      c = oldIndices[i + 2];
     adj[a].push(b, c);
     adj[b].push(a, c);
     adj[c].push(a, b);
@@ -83,10 +88,23 @@ async function repair() {
   // Keep structural chair components (legs, frame rails, backrest, armrests, cushion top/core)
   // Exclude duplicate overlapping sheets and tiny disconnected scrap
   const keepComps = new Set([
-    11, 19, 20, 24, // 4 legs
-    12, 16, 21, 23, 28, // frame rails
-    6, 29, 30, 31, 32, // cushion top, armrests, backrest outer/inner
-    4, 5, 26, // seat cushion core
+    11,
+    19,
+    20,
+    24, // 4 legs
+    12,
+    16,
+    21,
+    23,
+    28, // frame rails
+    6,
+    29,
+    30,
+    31,
+    32, // cushion top, armrests, backrest outer/inner
+    4,
+    5,
+    26, // seat cushion core
   ]);
 
   const oldToNewVert = new Int32Array(numVerts).fill(-1);
@@ -97,13 +115,23 @@ async function repair() {
 
   let newVertCount = 0;
   for (let i = 0; i < oldIndices.length; i += 3) {
-    const a = oldIndices[i], b = oldIndices[i + 1], c = oldIndices[i + 2];
+    const a = oldIndices[i],
+      b = oldIndices[i + 1],
+      c = oldIndices[i + 2];
     if (keepComps.has(compOfVert[a])) {
       for (const oldV of [a, b, c]) {
         if (oldToNewVert[oldV] === -1) {
           oldToNewVert[oldV] = newVertCount++;
-          newPos.push(oldPosFloats[oldV * 3], oldPosFloats[oldV * 3 + 1], oldPosFloats[oldV * 3 + 2]);
-          newNorm.push(oldNormFloats[oldV * 3], oldNormFloats[oldV * 3 + 1], oldNormFloats[oldV * 3 + 2]);
+          newPos.push(
+            oldPosFloats[oldV * 3],
+            oldPosFloats[oldV * 3 + 1],
+            oldPosFloats[oldV * 3 + 2],
+          );
+          newNorm.push(
+            oldNormFloats[oldV * 3],
+            oldNormFloats[oldV * 3 + 1],
+            oldNormFloats[oldV * 3 + 2],
+          );
           newUv.push(oldUvFloats[oldV * 2], oldUvFloats[oldV * 2 + 1]);
         }
         newIndices.push(oldToNewVert[oldV]);
@@ -111,17 +139,27 @@ async function repair() {
     }
   }
 
-  console.log(`Repaired chair mesh: ${newVertCount} vertices, ${newIndices.length / 3} triangles (was ${numVerts} verts, ${oldIndices.length / 3} tris)`);
+  console.log(
+    `Repaired chair mesh: ${newVertCount} vertices, ${newIndices.length / 3} triangles (was ${numVerts} verts, ${oldIndices.length / 3} tris)`,
+  );
 
   // Calculate new bounding box for POSITION
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  let minZ = Infinity, maxZ = -Infinity;
+  let minX = Infinity,
+    maxX = -Infinity;
+  let minY = Infinity,
+    maxY = -Infinity;
+  let minZ = Infinity,
+    maxZ = -Infinity;
   for (let i = 0; i < newVertCount; i++) {
-    const x = newPos[i * 3], y = newPos[i * 3 + 1], z = newPos[i * 3 + 2];
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    const x = newPos[i * 3],
+      y = newPos[i * 3 + 1],
+      z = newPos[i * 3 + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
 
   // Create new binary buffers for the chair

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateConfig } from "../packages/core/dist/index.js";
@@ -10,6 +10,17 @@ const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 const sha256 = (contents) => createHash("sha256").update(contents).digest("hex");
+
+function parseGlbJson(contents, sourcePath) {
+  assert(contents.subarray(0, 4).toString("ascii") === "glTF", `${sourcePath}: invalid GLB header`);
+  const jsonLength = contents.readUInt32LE(12);
+  return JSON.parse(
+    contents
+      .subarray(20, 20 + jsonLength)
+      .toString("utf8")
+      .trimEnd(),
+  );
+}
 
 async function listFiles(directory, prefix = "") {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -37,19 +48,27 @@ for (const entry of manifest.files) {
   assert(sha256(contents) === entry.sha256, `${entry.path}: SHA-256 does not match manifest`);
 }
 
-assert(
-  config.assets.basePath === "./tours/italian-flat-v3/",
-  "v3 must point to its own basePath",
-);
+assert(config.assets.basePath === "./tours/italian-flat-v3/", "v3 must point to its own basePath");
 assert(
   config.assets.mesh?.url === "mesh/v3_covered_windows.glb",
   "v3 must point to mesh/v3_covered_windows.glb",
 );
-assert(
-  config.assets.mesh?.draco === false,
-  "v3 mesh is standard GLB without Draco compression",
-);
+assert(config.assets.mesh?.draco === false, "v3 mesh is standard GLB without Draco compression");
 assert(config.nodes.length === 3, "v3 must retain all three capture points");
+
+const proxyPath = path.join(tourRoot, config.assets.mesh.url);
+const proxy = await readFile(proxyPath);
+const proxyJson = parseGlbJson(proxy, config.assets.mesh.url);
+const rugMesh = proxyJson.meshes.find((candidate) => candidate.name === "int_rug_mesh");
+assert(
+  rugMesh?.extras?.meshtourRepair === "padded-rug-projection-surface",
+  "v3 rug projection surface is not repaired",
+);
+assert(
+  proxyJson.accessors[rugMesh.primitives[0].attributes.POSITION].count === 4 &&
+    proxyJson.accessors[rugMesh.primitives[0].indices].count === 6,
+  "v3 rug projection surface must be a padded two-triangle plane",
+);
 
 const totalBytes = manifest.files.reduce((sum, entry) => sum + entry.bytes, 0);
 console.log(
