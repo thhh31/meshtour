@@ -15,6 +15,7 @@ Flat panorama viewers (Pannellum, Marzipano, krpano, Kuula) display a sphere of 
 - **Object-aware cursor** — hover a table, wall, or apartment unit to highlight it, change the cursor, or show a tooltip.
 - **Occlusion-aware hotspots** — a hotspot behind a wall is hidden, exactly as it should be.
 - **Walking transitions** — the camera moves through real 3D space between viewpoints while panoramas re-project onto the mesh. This is the signature feature.
+- **WebXR / VR mode** — headset pose is calibrated to each panorama node, with controller-ray hotspot selection and comfort teleports.
 - **Pre-rendered furniture variants** — transparent per-node panorama layers can replace an interactable's finish while retaining offline-rendered lighting and transition alignment.
 
 The closest commercial analogue is Matterport, but MeshTour's primary workflow is **same-source**: panoramas _and_ proxy mesh are exported from one 3D model (Blender, 3ds Max…), so alignment is exact and free. That makes it uniquely suited to **pre-construction real estate and archviz** — spaces that don't physically exist yet and cannot be scanned.
@@ -152,7 +153,6 @@ The staged engineering plan for eliminating the remaining walk artifacts is in
 
 ## Roadmap
 
-- WebXR / headset support
 - Calibration tooling for photographed panoramas of real spaces
 - Offline depth-map import for scan/photo workflows
 - Dollhouse view, minimap, floor plans

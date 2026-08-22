@@ -20,6 +20,9 @@ await engine.start();
 
 engine.setMeasurementsVisible(true);
 engine.setViewMode("top"); // orthographic, panorama-textured overview
+
+// Call from a click/tap. The method rejects when immersive WebXR is unavailable.
+await engine.enterVR();
 ```
 
 Give the container an explicit height before starting the engine, for example
@@ -28,6 +31,12 @@ Give the container an explicit height before starting the engine, for example
 The engine can render an automatic proxy-derived plan into a canvas with
 `renderPlan()`. Optional `spatial` config supplies stable plan bounds,
 measurement targets, and a generated fallback ceiling.
+
+WebXR uses `local-floor` tracking, calibrates the headset to the current node,
+and exposes controller rays to the same navigation/hotspot interaction system.
+Node changes default to comfort teleports while VR is active. WebXR requires
+HTTPS (or localhost) and a browser/headset supporting `immersive-vr`; use
+`checkVRSupport()`, `isVRActive()`, and `exitVR()` for custom controls.
 
 The package includes TypeScript declarations and supports both ESM and
 CommonJS. The config schema is versioned; see `docs/CONFIG.md` in the MeshTour

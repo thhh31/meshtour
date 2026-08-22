@@ -1,5 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+test("keeps the dollhouse toggle inside a phone viewport", async ({ page }) => {
+  await page.goto("/?test=1");
+  const button = page.getByRole("button", { name: "Open dollhouse view" });
+  await expect(button).toBeVisible();
+  const box = await button.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+});
+
 test("keeps the tour controls usable on a phone viewport", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/?tour=italian-flat&test=1");

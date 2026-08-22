@@ -20,7 +20,7 @@ interface IndicatorState {
 
 /** Persistent bottom navigation driven by the public useTour() API with smooth sliding pill animation. */
 export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
-  const { engine, ready, transitioning, currentNode, goToNode } = useTour();
+  const { engine, ready, transitioning, currentNode, viewMode, goToNode } = useTour();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [navigationPending, setNavigationPending] = useState(false);
   const [indicator, setIndicator] = useState<IndicatorState | null>(null);
@@ -30,7 +30,8 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const navigationLockRef = useRef(false);
 
-  const activeNodeId = visualTarget ?? currentNode ?? nodes[0]?.id ?? null;
+  const activeNodeId =
+    visualTarget ?? (viewMode === "dollhouse" ? null : (currentNode ?? nodes[0]?.id ?? null));
   const navigationDisabled = !ready || !engine || navigationPending || transitioning;
 
   const navigate = (nodeId: string) => {
@@ -146,7 +147,7 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
       }}
       aria-label="Tour points"
     >
-      {indicator && (
+      {indicator && activeNodeId ? (
         <div
           aria-hidden="true"
           style={{
@@ -167,7 +168,7 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
               : "opacity 150ms ease",
           }}
         />
-      )}
+      ) : null}
 
       {nodes.map((node, index) => {
         const selected = node.id === activeNodeId;

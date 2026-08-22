@@ -21,6 +21,7 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
     "mesh": { "url": "mesh/apartment.glb", "draco": true },
     "visibilityMesh": { "url": "mesh/transition-visibility.glb", "draco": true },
     "bridge": { "url": "mesh/transition-bridge.glb", "draco": true },
+    "dollhouse": { "url": "mesh/dollhouse.glb", "draco": true },
     "basePath": "https://cdn.example.com/tours/apartment/",
   },
   "rendering": {
@@ -154,6 +155,8 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
 | `visibilityMesh.draco` | boolean | `false` | Whether the transition-visibility GLB is Draco-compressed.                                                                                               |
 | `bridge.url`           | string  | –       | Optional baked, unlit GLB shown behind rejected panorama fragments during a walk.                                                                        |
 | `bridge.draco`         | boolean | `false` | Whether the bridge GLB is Draco-compressed.                                                                                                              |
+| `dollhouse.url`        | string  | –       | Optional pre-textured dollhouse GLB. When omitted, the interaction proxy is combined with up to four spatially distributed panorama previews.            |
+| `dollhouse.draco`      | boolean | `false` | Whether the dedicated dollhouse GLB is Draco-compressed.                                                                                                 |
 | `basePath`             | string  | –       | All relative URLs in the config resolve against this, so a tour folder is relocatable. Absolute (`https:`, `/…`), `blob:` and `data:` URLs pass through. |
 
 ### `rendering`
@@ -217,15 +220,15 @@ a missing fallback ceiling, and display accurate architectural/object
 dimensions. The same feature works for apartments, showrooms, products, and
 other metric proxy scenes.
 
-| Field                   | Type                       | Default      | Notes                                                                                                 |
-| ----------------------- | -------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| `overview.bounds`       | `{ min:[x,z], max:[x,z] }` | proxy bounds | Stable plan/top-view crop.                                                                            |
-| `overview.floorY`       | number                     | `0`          | Reference floor elevation.                                                                            |
-| `overview.ceiling`      | object                     | –            | Fallback slab with `y`, optional `thickness` (`0.08`), and X/Z `bounds`; skipped if a ceiling exists. |
-| `overview.topView`      | object                     | –            | Baked orthographic image with `url` and optional X/Z `bounds`; replaces projective 3D top rendering.  |
-| `overview.hiddenMeshes` | string[]                   | `[]`         | Exact proxy names hidden from plan/top view.                                                          |
-| `measurementColor`      | CSS color                  | `#ffffff`    | Measured-geometry outline color.                                                                      |
-| `measurements`          | Measurement[]              | `[]`         | Authored architectural bounds and/or automatic named-object bounds.                                   |
+| Field                   | Type                       | Default      | Notes                                                                                                                                           |
+| ----------------------- | -------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `overview.bounds`       | `{ min:[x,z], max:[x,z] }` | proxy bounds | Stable plan/top-view crop.                                                                                                                      |
+| `overview.floorY`       | number                     | `0`          | Reference floor elevation.                                                                                                                      |
+| `overview.ceiling`      | object                     | –            | Fallback slab with `y`, optional `thickness` (`0.08`), and X/Z `bounds`; skipped if a ceiling exists.                                           |
+| `overview.topView`      | object                     | –            | Baked orthographic image with `url`, optional X/Z `bounds`, and optional `dollhouseProjection` (`false`); replaces projective 3D top rendering. |
+| `overview.hiddenMeshes` | string[]                   | `[]`         | Exact proxy names hidden from plan/top view.                                                                                                    |
+| `measurementColor`      | CSS color                  | `#ffffff`    | Measured-geometry outline color.                                                                                                                |
+| `measurements`          | Measurement[]              | `[]`         | Authored architectural bounds and/or automatic named-object bounds.                                                                             |
 
 Each measurement requires an `id`, `label`, and either an exact proxy
 `target` name or explicit `{ min:[x,y,z], max:[x,y,z] }` bounds. `axes` may
@@ -243,6 +246,10 @@ orthographic camera directly above the space and configure it as
 in the same world coordinate system. If no image is configured or loading
 fails, MeshTour falls back to the projective 3D overview.
 
+Set `topView.dollhouseProjection: true` only when the same image should fill
+uncovered upward-facing dollhouse surfaces. It is disabled by default because
+orthographic projection can visibly bend across non-planar proxy geometry.
+
 Top mode displays navigation links from every location. Selecting one returns
 to panorama mode and travels to that link's target node.
 
@@ -250,6 +257,7 @@ to panorama mode and travels to that link's target node.
 engine.setMeasurementsVisible(true);
 engine.setMeasurementTarget("sofa");
 engine.setViewMode("top");
+engine.setViewMode("dollhouse");
 engine.renderPlan(document.querySelector("canvas")!);
 ```
 

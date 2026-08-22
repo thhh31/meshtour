@@ -38,6 +38,111 @@ test("loads Italian Flat v3 by default and accepts an alternate tour URL", async
   await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toBeVisible();
 });
 
+test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async ({ page }) => {
+  test.setTimeout(90_000);
+  const consoleProblems: string[] = [];
+  const panoramaPreviews = new Set<string>();
+  page.on("console", (message) => {
+    const isProblem = message.type() === "warning" || message.type() === "error";
+    const isChromiumReadbackNotice = message.text().includes("GPU stall due to ReadPixels");
+    if (isProblem && !isChromiumReadbackNotice) {
+      consoleProblems.push(message.text());
+    }
+  });
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (/\/italian-flat-v3\/pano\/(?:kitchen|living|lounge)_1k\.jpg$/.test(pathname)) {
+      panoramaPreviews.add(pathname);
+    }
+  });
+  await page.goto("/?test=1");
+  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
+    "aria-current",
+    "location",
+  );
+
+  await expect(page.getByRole("button", { name: "Open dollhouse view" })).toBeVisible();
+  await page.getByRole("button", { name: "Open dollhouse view" }).click();
+  await expect(page.getByRole("button", { name: "Return to panorama" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator('nav[aria-label="Tour points"] [aria-current]')).toHaveCount(0);
+  const flightStart = await page.evaluate(() => {
+    const engine = window.__MESHTOUR_TEST_ENGINE__!;
+    const position = engine.getActiveCamera().position;
+    const sharedLinks = engine.getScene().getObjectByName("meshtour_shared_links");
+    return {
+      state: engine.state,
+      position: position.toArray(),
+      sharedGroupVisible: sharedLinks?.visible,
+      visibleSharedLinks: sharedLinks?.children.filter((child) => child.visible).length,
+    };
+  });
+  expect(flightStart.state).toBe("transitioning");
+  expect(flightStart.sharedGroupVisible).toBe(true);
+  expect(flightStart.visibleSharedLinks).toBe(3);
+  await expect
+    .poll(() =>
+      page.evaluate((start) => {
+        const position = window.__MESHTOUR_TEST_ENGINE__!.getActiveCamera().position;
+        return Math.hypot(position.x - start[0], position.y - start[1], position.z - start[2]);
+      }, flightStart.position),
+    )
+    .toBeGreaterThan(0.01);
+  await expect.poll(() => panoramaPreviews.size).toBe(3);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const engine = window.__MESHTOUR_TEST_ENGINE__!;
+        let topViewProjection: "pending" | "enabled" | "disabled" = "pending";
+        engine.getScene().traverse((object) => {
+          const material = (object as { material?: { name?: string; uniforms?: object } }).material;
+          if (material?.name?.startsWith("meshtour_dollhouse_projection_") && material.uniforms) {
+            topViewProjection = "uTopView" in material.uniforms ? "enabled" : "disabled";
+          }
+        });
+        return topViewProjection;
+      }),
+    )
+    .toBe("disabled");
+
+  await page.getByRole("button", { name: "Return to panorama" }).click();
+  await expect(page.getByRole("button", { name: "Open dollhouse view" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  const returnFlight = await page.evaluate(() => {
+    const engine = window.__MESHTOUR_TEST_ENGINE__!;
+    const skysphere = engine.getScene().getObjectByName("meshtour_panorama_skysphere");
+    let dollhouseMaterials = 0;
+    engine.getScene().traverse((object) => {
+      const material = (object as { material?: { name?: string } }).material;
+      if (material?.name?.startsWith("meshtour_dollhouse_projection_")) {
+        dollhouseMaterials += 1;
+      }
+    });
+    return { skysphereVisible: skysphere?.visible, dollhouseMaterials };
+  });
+  expect(returnFlight.skysphereVisible).toBe(false);
+  expect(returnFlight.dollhouseMaterials).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
+    "aria-current",
+    "location",
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.state), { timeout: 30_000 })
+    .toBe("ready");
+  expect(
+    await page.evaluate(
+      () =>
+        window.__MESHTOUR_TEST_ENGINE__!.getScene().getObjectByName("meshtour_panorama_skysphere")
+          ?.visible,
+    ),
+  ).toBe(true);
+  expect(consoleProblems).toEqual([]);
+});
+
 test("loads Italian Flat v2 with dedicated visibility and furniture-safe paths", async ({
   page,
 }) => {
