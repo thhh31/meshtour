@@ -54,6 +54,7 @@ uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform float uDepthFilter;
 uniform float uDebugView;
+uniform float uOpacity;
 
 #ifdef USE_PANORAMA_LAYER
 
@@ -247,7 +248,7 @@ void main() {
 
   // linearToOutputTexel is injected by the renderer for the active output
   // color space (same conversion <colorspace_fragment> performs).
-  fragColor = linearToOutputTexel(color);
+  fragColor = linearToOutputTexel(vec4(color.rgb, color.a * uOpacity));
 }
 `;
 
@@ -294,6 +295,7 @@ export interface PanoramaUniforms {
   uColorB: { value: Vector3 };
   uDepthFilter: { value: number };
   uDebugView: { value: number };
+  uOpacity: { value: number };
 }
 
 export interface PanoramaLayerUniforms {
@@ -339,6 +341,7 @@ export class PanoramaProjection {
     uColorB: { value: new Vector3(1, 1, 1) },
     uDepthFilter: { value: 2 },
     uDebugView: { value: 0 },
+    uOpacity: { value: 1 },
   };
 
   private materials: ShaderMaterial[] = [];

@@ -115,6 +115,11 @@ export class AssetManager {
     return asset ? this.loadMeshAsset(asset) : null;
   }
 
+  async loadDollhouseMesh(): Promise<Object3D | null> {
+    const asset = this.config.assets.dollhouse;
+    return asset ? this.loadMeshAsset(asset) : null;
+  }
+
   private node(nodeId: string): NodeConfig {
     const node = this.config.nodes.find((n) => n.id === nodeId);
     if (!node) throw new Error(`Unknown node "${nodeId}"`);
@@ -279,6 +284,15 @@ export class AssetManager {
   /** Load and cache a non-panorama image such as a baked orthographic overview. */
   ensureAuxiliaryTexture(url: string): Promise<Texture> {
     const resolved = resolveAssetUrl(this.config, url);
+    return this.ensureResolvedAuxiliaryTexture(resolved);
+  }
+
+  /** Stable preview owned by the dollhouse compositor, independent of panorama upgrades. */
+  ensureDollhousePreview(nodeId: string): Promise<Texture> {
+    return this.ensureResolvedAuxiliaryTexture(this.panoramaUrl(nodeId, "preview"));
+  }
+
+  private ensureResolvedAuxiliaryTexture(resolved: string): Promise<Texture> {
     let entry = this.auxiliaryTextures.get(resolved);
     if (!entry) {
       entry = {};

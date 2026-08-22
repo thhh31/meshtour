@@ -8,6 +8,8 @@ export interface TourContextValue {
   currentNode: string | null;
   viewMode: TourViewMode;
   measurementsVisible: boolean;
+  vrSupported: boolean;
+  vrActive: boolean;
 }
 
 export const TourContext = createContext<TourContextValue>({
@@ -17,4 +19,6 @@ export const TourContext = createContext<TourContextValue>({
   currentNode: null,
   viewMode: "panorama",
   measurementsVisible: false,
+  vrSupported: false,
+  vrActive: false,
 });

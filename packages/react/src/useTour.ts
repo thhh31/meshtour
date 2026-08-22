@@ -1,4 +1,4 @@
-import type { TourEngine, TourViewMode, TransitionOptions } from "@meshtour/core";
+import type { EnterVROptions, TourEngine, TourViewMode, TransitionOptions } from "@meshtour/core";
 import { useCallback, useContext } from "react";
 import { TourContext } from "./context";
 
@@ -13,18 +13,30 @@ export interface UseTourResult {
   currentNode: string | null;
   viewMode: TourViewMode;
   measurementsVisible: boolean;
+  vrSupported: boolean;
+  vrActive: boolean;
   goToNode: (nodeId: string, options?: TransitionOptions) => Promise<void>;
   lookAt: (target: [number, number, number]) => void;
   getCurrentNode: () => string | null;
   setHotspotsVisible: (visible: boolean) => void;
   setViewMode: (mode: TourViewMode) => void;
   setMeasurementsVisible: (visible: boolean) => void;
+  enterVR: (options?: EnterVROptions) => Promise<void>;
+  exitVR: () => Promise<void>;
 }
 
 /** Imperative tour API. Must be used inside `<Tour>` children. */
 export function useTour(): UseTourResult {
-  const { engine, ready, transitioning, currentNode, viewMode, measurementsVisible } =
-    useContext(TourContext);
+  const {
+    engine,
+    ready,
+    transitioning,
+    currentNode,
+    viewMode,
+    measurementsVisible,
+    vrSupported,
+    vrActive,
+  } = useContext(TourContext);
 
   const goToNode = useCallback(
     async (nodeId: string, options?: TransitionOptions) => {
@@ -53,6 +65,18 @@ export function useTour(): UseTourResult {
     [engine],
   );
 
+  const enterVR = useCallback(
+    async (options?: EnterVROptions) => {
+      if (!engine) throw new Error("useTour: engine is not mounted yet");
+      await engine.enterVR(options);
+    },
+    [engine],
+  );
+
+  const exitVR = useCallback(async () => {
+    await engine?.exitVR();
+  }, [engine]);
+
   return {
     engine,
     ready,
@@ -60,11 +84,15 @@ export function useTour(): UseTourResult {
     currentNode,
     viewMode,
     measurementsVisible,
+    vrSupported,
+    vrActive,
     goToNode,
     lookAt,
     getCurrentNode,
     setHotspotsVisible,
     setViewMode,
     setMeasurementsVisible,
+    enterVR,
+    exitVR,
   };
 }

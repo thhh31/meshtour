@@ -56,7 +56,7 @@ describe("tour config schema", () => {
     expect(parsed.rendering.transition).toBe("fade");
   });
 
-  it("accepts optional transition visibility, bridge, depth, correction, and path metadata", () => {
+  it("accepts optional transition visibility, bridge, dollhouse, depth, correction, and path metadata", () => {
     const config = validConfig();
     config.nodes[0] = minimalNode("living_room", {
       panorama: {
@@ -84,11 +84,13 @@ describe("tour config schema", () => {
       assets: {
         visibilityMesh: { url: "mesh/visibility.glb", draco: true },
         bridge: { url: "mesh/bridge.glb" },
+        dollhouse: { url: "mesh/dollhouse.glb", draco: true },
       },
     });
 
     expect(parsed.assets.visibilityMesh?.draco).toBe(true);
     expect(parsed.assets.bridge?.draco).toBe(false);
+    expect(parsed.assets.dollhouse?.draco).toBe(true);
     expect(parsed.nodes[0]!.depth?.encoding).toBe("rgba8-linear-radial");
     expect(parsed.nodes[0]!.panorama.correction?.exposure).toBe(-0.25);
     expect(parsed.nodes[0]!.links[0]!.path?.reversible).toBe(true);
@@ -118,6 +120,7 @@ describe("tour config schema", () => {
 
     expect(parsed.spatial.overview.ceiling?.thickness).toBe(0.08);
     expect(parsed.spatial.overview.topView?.url).toBe("overview/top.jpg");
+    expect(parsed.spatial.overview.topView?.dollhouseProjection).toBe(false);
     expect(parsed.spatial.measurements[0]!.axes).toEqual(["width", "depth"]);
     expect(parsed.spatial.measurements[1]!.axes).toEqual(["width", "depth", "height"]);
   });

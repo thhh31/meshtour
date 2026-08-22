@@ -108,6 +108,7 @@ export class NavigationManager {
   private currentNodeId: string | null = null;
   private markersVisible = true;
   private showAllMarkers = false;
+  private showCurrentSharedMarker = false;
   private authorPathGroup = new Group();
   private authorWaypointGeometry = new SphereGeometry(0.075, 12, 8);
   private authorWaypointMaterial = new MeshBasicMaterial({ color: 0xffb020, depthTest: false });
@@ -118,6 +119,7 @@ export class NavigationManager {
   private preparation = 0;
   private disposed = false;
   private walkFallbackReason: string | null = null;
+  private position = new Vector3();
   private transition: {
     from: NodeConfig;
     to: NodeConfig;
@@ -137,12 +139,14 @@ export class NavigationManager {
   onPrepareProjectionSlot: ((slot: "a" | "b", nodeId: string) => Promise<void>) | null = null;
   /** Promote optional projection layers at the same instant as panorama B. */
   onPromoteProjectionSlots: (() => void) | null = null;
-  /** Lets the engine leave top view before a marker starts navigation. */
+  /** Lets the engine leave a spatial overview before a marker starts navigation. */
   onNavigateRequested: ((nodeId: string) => void) | null = null;
   /** Compile/upload bridge resources before transitionstart. */
   onPrepareTransition: (() => Promise<void> | void) | null = null;
   /** Show and fade baked bridge coverage only during a walk. */
   onTransitionProgress: ((progress: number, bridgeActive: boolean) => void) | null = null;
+  /** Keeps alternate camera rigs (for example WebXR) aligned with navigation. */
+  onPositionChange: ((position: Vector3) => void) | null = null;
 
   constructor(
     scene: Scene,
@@ -235,6 +239,16 @@ export class NavigationManager {
     return this.currentNodeId;
   }
 
+  getPosition(target = new Vector3()): Vector3 {
+    return target.copy(this.position);
+  }
+
+  private setPosition(position: Vector3): void {
+    this.position.copy(position);
+    if (this.onPositionChange) this.onPositionChange(this.position);
+    else this.camera.position.copy(position);
+  }
+
   isTransitioning(): boolean {
     return this.transition !== null;
   }
@@ -251,7 +265,7 @@ export class NavigationManager {
     this.projection.setSlotA(texture, center, node.panorama.yaw, depth, node.panorama.correction);
     this.projection.setBlend(0);
     this.onFade?.(0);
-    this.camera.position.copy(center);
+    this.setPosition(center);
     const from = this.currentNodeId;
     this.currentNodeId = nodeId;
     this.updateLinkVisibility();
@@ -364,16 +378,18 @@ export class NavigationManager {
       const hideAtTarget = disc.link.hideAtTarget ?? true;
       disc.mesh.visible = !(
         disc.fromNodeId === null &&
+        !this.showCurrentSharedMarker &&
         hideAtTarget &&
         disc.link.to === this.currentNodeId
       );
     }
   }
 
-  /** Top view exposes the complete navigation graph; panorama shows only local links. */
-  setMarkersVisible(visible: boolean, showAll = false): void {
+  /** Spatial overviews expose the complete navigation graph; panorama shows only local links. */
+  setMarkersVisible(visible: boolean, showAll = false, showCurrentShared = false): void {
     this.markersVisible = visible;
     this.showAllMarkers = showAll;
+    this.showCurrentSharedMarker = showCurrentShared;
     this.updateLinkVisibility();
   }
 
@@ -401,7 +417,8 @@ export class NavigationManager {
       this.config.rendering.transition === "fade" || this.walkFallbackReason !== null;
     const travel = fadeTransition ? smoothstep(0.42, 0.58, t) : easeInOutCubic(t);
 
-    transition.path.getPointAt(travel, this.camera.position);
+    transition.path.getPointAt(travel, this.position);
+    this.setPosition(this.position);
     if (fadeTransition) {
       this.projection.setBlend(t < 0.5 ? 0 : 1);
       const fade = t < 0.42 ? smoothstep(0, 0.42, t) : t <= 0.58 ? 1 : 1 - smoothstep(0.58, 1, t);
@@ -459,7 +476,7 @@ export class NavigationManager {
       from: transition.from.id,
       to: transition.to.id,
       progress: transition.progress,
-      camera: this.camera.position.toArray(),
+      camera: this.position.toArray(),
       blend: this.projection.uniforms.uBlend.value,
       depthAReady: this.projection.uniforms.uHasDepthA.value > 0.5,
       depthBReady: this.projection.uniforms.uHasDepthB.value > 0.5,

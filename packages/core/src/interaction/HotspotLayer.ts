@@ -66,6 +66,7 @@ export class HotspotLayer {
   private defaultPopups: boolean;
   private config: TourConfig;
   private occlusionClock = 0;
+  private cameraWorldPosition = new Vector3();
 
   constructor(
     scene: Scene,
@@ -224,7 +225,7 @@ export class HotspotLayer {
     const testOcclusion = this.occlusionClock <= 0;
     if (testOcclusion) this.occlusionClock = 0.1;
 
-    const cameraPosition = this.camera.position;
+    const cameraPosition = this.camera.getWorldPosition(this.cameraWorldPosition);
     for (const entry of this.entries) {
       const belongsToNode =
         entry.hotspot.node === undefined || entry.hotspot.node === this.currentNodeId;

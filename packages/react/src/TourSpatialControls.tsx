@@ -8,6 +8,10 @@ export interface TourSpatialControlsProps {
   measurements?: boolean;
   /** Show the container fullscreen toggle (default true). */
   fullscreen?: boolean;
+  /** Show the perspective dollhouse-view toggle (default true). */
+  dollhouse?: boolean;
+  /** Show immersive VR when WebXR is available (default true). */
+  vr?: boolean;
   style?: CSSProperties;
 }
 
@@ -69,6 +73,39 @@ function TopViewIcon({ active }: { active: boolean }) {
   );
 }
 
+function DollhouseIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="m4 8 8-4 8 4v9l-8 4-8-4V8Z"
+        fill={active ? "currentColor" : "none"}
+        fillOpacity={active ? 0.18 : 0}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="m4 8 8 4 8-4M12 12v9" stroke="currentColor" strokeWidth="1.6" />
+      <path d="m7.5 9.75 4.5-2.2 4.5 2.2" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function VRIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M3.5 8.5c0-1.1.9-2 2-2h13c1.1 0 2 .9 2 2v6.2c0 1.1-.9 2-2 2h-3.3l-1.8-2.6h-2.8l-1.8 2.6H5.5c-1.1 0-2-.9-2-2V8.5Z"
+        fill={active ? "currentColor" : "none"}
+        fillOpacity={active ? 0.18 : 0}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M12 6.5v7.6" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
 function useCompactLayout(): boolean {
   const [compact, setCompact] = useState(false);
   useEffect(() => {
@@ -106,6 +143,8 @@ export function TourSpatialControls({
   plan = true,
   measurements = true,
   fullscreen = true,
+  dollhouse = true,
+  vr = true,
   style,
 }: TourSpatialControlsProps) {
   const {
@@ -114,9 +153,13 @@ export function TourSpatialControls({
     currentNode,
     viewMode,
     measurementsVisible,
+    vrSupported,
+    vrActive,
     goToNode,
     setViewMode,
     setMeasurementsVisible,
+    enterVR,
+    exitVR,
   } = useTour();
   const compact = useCompactLayout();
   const planSurfaceRef = useRef<HTMLDivElement>(null);
@@ -246,6 +289,8 @@ export function TourSpatialControls({
   const planWidth = compact ? 138 : 218;
   const planHeight = compact ? 110 : 166;
   const topLabel = viewMode === "top" ? "Return to panorama" : "Open top view";
+  const dollhouseLabel = viewMode === "dollhouse" ? "Return to panorama" : "Open dollhouse view";
+  const vrLabel = vrActive ? "Exit VR" : "Enter VR";
 
   return (
     <>
@@ -342,6 +387,47 @@ export function TourSpatialControls({
           ...style,
         }}
       >
+        {vr && vrSupported ? (
+          <button
+            type="button"
+            onClick={() => {
+              const action = vrActive ? exitVR() : enterVR();
+              void action.catch((error: unknown) => {
+                console.warn(`MeshTour could not ${vrActive ? "exit" : "enter"} VR`, error);
+              });
+            }}
+            disabled={!ready}
+            aria-label={vrLabel}
+            title={vrLabel}
+            aria-pressed={vrActive}
+            style={{
+              ...iconButton,
+              color: vrActive ? "#dff9ff" : iconButton.color,
+              background: vrActive ? "rgba(25,113,137,.9)" : iconButton.background,
+              cursor: ready ? "pointer" : "wait",
+            }}
+          >
+            <VRIcon active={vrActive} />
+          </button>
+        ) : null}
+        {dollhouse ? (
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === "dollhouse" ? "panorama" : "dollhouse")}
+            disabled={!ready}
+            aria-label={dollhouseLabel}
+            title={dollhouseLabel}
+            aria-pressed={viewMode === "dollhouse"}
+            style={{
+              ...iconButton,
+              color: viewMode === "dollhouse" ? "#dff9ff" : iconButton.color,
+              background: viewMode === "dollhouse" ? "rgba(25,113,137,.9)" : iconButton.background,
+              cursor: ready ? "pointer" : "wait",
+            }}
+          >
+            <DollhouseIcon active={viewMode === "dollhouse"} />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setViewMode(viewMode === "top" ? "panorama" : "top")}

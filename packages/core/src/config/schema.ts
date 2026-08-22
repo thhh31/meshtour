@@ -135,6 +135,13 @@ export const assetsSchema = z.object({
       draco: z.boolean().default(false),
     })
     .optional(),
+  /** Optional pre-textured dollhouse GLB. The interaction proxy is reused when omitted. */
+  dollhouse: z
+    .object({
+      url: z.string().min(1),
+      draco: z.boolean().default(false),
+    })
+    .optional(),
   /** All relative URLs in the config resolve against this, making a tour folder relocatable. */
   basePath: z.string().optional(),
 });
@@ -204,6 +211,8 @@ export const topViewSchema = z.object({
   url: z.string().min(1),
   /** World X/Z extent represented by the full image; defaults to overview.bounds. */
   bounds: planBoundsSchema.optional(),
+  /** Project this image onto uncovered dollhouse surfaces. Disabled because projection can bend. */
+  dollhouseProjection: z.boolean().default(false),
 });
 export type TopViewConfig = z.infer<typeof topViewSchema>;
 

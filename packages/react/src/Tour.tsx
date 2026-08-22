@@ -40,6 +40,8 @@ export interface TourProps {
   onVariantChange?: (configurableId: string, variantId: string) => void;
   onViewModeChange?: (mode: TourViewMode) => void;
   onMeasurementsChange?: (visible: boolean) => void;
+  onVRSupportChange?: (supported: boolean) => void;
+  onVRChange?: (active: boolean) => void;
   /**
    * Custom React UI for hotspot popups. When provided, the engine's built-in
    * HTML popups are disabled and this renders anchored to the hotspot instead.
@@ -90,6 +92,8 @@ export function Tour(props: TourProps): ReactNode {
   const [currentNode, setCurrentNode] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<TourViewMode>("panorama");
   const [measurementsVisible, setMeasurementsVisible] = useState(false);
+  const [vrSupported, setVRSupported] = useState(false);
+  const [vrActive, setVRActive] = useState(false);
   const [popup, setPopup] = useState<ActivePopup | null>(null);
 
   // Keep latest callbacks in a ref so engine listeners never need rebinding.
@@ -154,9 +158,20 @@ export function Tour(props: TourProps): ReactNode {
       setViewMode(mode);
       callbacksRef.current.onViewModeChange?.(mode);
     });
+    tourEngine.on("viewtransitionstart", () => setTransitioning(true));
+    tourEngine.on("viewtransitionend", () => setTransitioning(false));
     tourEngine.on("measurementschange", ({ visible }) => {
       setMeasurementsVisible(visible);
       callbacksRef.current.onMeasurementsChange?.(visible);
+    });
+    tourEngine.on("vrsupportchange", ({ supported }) => {
+      setVRSupported(supported);
+      callbacksRef.current.onVRSupportChange?.(supported);
+    });
+    tourEngine.on("vrchange", ({ active }) => {
+      setVRActive(active);
+      setPopup(null);
+      callbacksRef.current.onVRChange?.(active);
     });
 
     setEngine(tourEngine);
@@ -173,6 +188,8 @@ export function Tour(props: TourProps): ReactNode {
       setCurrentNode(null);
       setViewMode("panorama");
       setMeasurementsVisible(false);
+      setVRSupported(false);
+      setVRActive(false);
       setPopup(null);
     };
     // Intentionally not depending on engineOptions/authorMode: options are
@@ -205,8 +222,26 @@ export function Tour(props: TourProps): ReactNode {
   const closePopup = useCallback(() => setPopup(null), []);
 
   const contextValue = useMemo(
-    () => ({ engine, ready, transitioning, currentNode, viewMode, measurementsVisible }),
-    [engine, ready, transitioning, currentNode, viewMode, measurementsVisible],
+    () => ({
+      engine,
+      ready,
+      transitioning,
+      currentNode: viewMode === "dollhouse" ? null : currentNode,
+      viewMode,
+      measurementsVisible,
+      vrSupported,
+      vrActive,
+    }),
+    [
+      engine,
+      ready,
+      transitioning,
+      currentNode,
+      viewMode,
+      measurementsVisible,
+      vrSupported,
+      vrActive,
+    ],
   );
 
   return (

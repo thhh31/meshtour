@@ -229,6 +229,17 @@ export class InteractionManager {
     this.onPointerMove(event);
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
+    this.selectWithCurrentRay();
+  };
+
+  /** Dispatch a selection from an arbitrary world-space ray (for XR controllers). */
+  selectFromRay(origin: Vector3, direction: Vector3): boolean {
+    if (!this.enabled) return false;
+    this.raycaster.set(origin, direction);
+    return this.selectWithCurrentRay();
+  }
+
+  private selectWithCurrentRay(): boolean {
     const pickableHit = this.raycastPickables();
     const proxyHit = this.raycastProxy();
     if (
@@ -236,10 +247,10 @@ export class InteractionManager {
       isPickableInFront(pickableHit.intersection.distance, proxyHit?.distance ?? null)
     ) {
       pickableHit.pickable.onClick?.(pickableHit.intersection);
-      return;
+      return true;
     }
 
-    if (!proxyHit) return;
+    if (!proxyHit) return false;
     const sceneHit = this.toSceneHit(proxyHit);
     if (sceneHit.interactableId) {
       this.events.emit("interactableclick", {
@@ -248,7 +259,8 @@ export class InteractionManager {
       });
     }
     this.onSceneClick?.(sceneHit);
-  };
+    return true;
+  }
 
   private raycastPickables(): { pickable: Pickable; intersection: Intersection } | null {
     let best: { pickable: Pickable; intersection: Intersection } | null = null;
@@ -289,6 +301,17 @@ export class InteractionManager {
 
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
+    this.updateHoverWithCurrentRay(true);
+  }
+
+  /** Update hover/highlight state from a world-space ray (for XR controllers). */
+  updateFromRay(origin: Vector3, direction: Vector3): void {
+    if (!this.enabled) return;
+    this.raycaster.set(origin, direction);
+    this.updateHoverWithCurrentRay(false);
+  }
+
+  private updateHoverWithCurrentRay(updateCursor: boolean): void {
     const pickableHit = this.raycastPickables();
     const proxyHit = this.raycastProxy();
     const pickableInFront =
@@ -299,7 +322,7 @@ export class InteractionManager {
       this.setHoveredPickable(pickableHit.pickable);
       this.setHoveredInteractable(null);
       this.reticle.visible = false;
-      this.element.style.cursor = "pointer";
+      if (updateCursor) this.element.style.cursor = "pointer";
       return;
     }
     this.setHoveredPickable(null);
@@ -307,14 +330,14 @@ export class InteractionManager {
     if (!proxyHit) {
       this.setHoveredInteractable(null);
       this.reticle.visible = false;
-      this.element.style.cursor = "";
+      if (updateCursor) this.element.style.cursor = "";
       return;
     }
 
     const sceneHit = this.toSceneHit(proxyHit);
     this.updateReticle(sceneHit);
     this.setHoveredInteractable(sceneHit.interactableId);
-    this.element.style.cursor = sceneHit.interactableId ? "pointer" : "";
+    if (updateCursor) this.element.style.cursor = sceneHit.interactableId ? "pointer" : "";
   }
 
   private updateReticle(hit: SceneHit): void {

@@ -1,6 +1,11 @@
 // Engine
 export { TourEngine } from "./engine/TourEngine";
-export type { TourEngineOptions, TourEngineState, TourViewMode } from "./engine/TourEngine";
+export type {
+  EnterVROptions,
+  TourEngineOptions,
+  TourEngineState,
+  TourViewMode,
+} from "./engine/TourEngine";
 export { AssetManager } from "./engine/AssetManager";
 export type { AssetManagerOptions } from "./engine/AssetManager";
 

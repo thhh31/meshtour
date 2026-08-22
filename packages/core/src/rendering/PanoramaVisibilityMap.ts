@@ -67,9 +67,11 @@ export class PanoramaVisibilityMap {
   private readonly depthScene = new Scene();
   private readonly depthMaterial: ShaderMaterial;
   private readonly targets = new Map<string, WebGLCubeRenderTarget>();
+  private readonly size: number;
 
-  constructor(renderer: WebGLRenderer, proxyRoot: Object3D) {
+  constructor(renderer: WebGLRenderer, proxyRoot: Object3D, size = PANORAMA_DEPTH_SIZE) {
     this.renderer = renderer;
+    this.size = size;
     this.depthScene.background = new Color(0xffffff);
     this.depthScene.add(proxyRoot.clone(true));
     this.depthMaterial = new ShaderMaterial({
@@ -92,7 +94,7 @@ export class PanoramaVisibilityMap {
     const cached = this.targets.get(nodeId);
     if (cached) return cached.texture;
 
-    const target = new WebGLCubeRenderTarget(PANORAMA_DEPTH_SIZE, {
+    const target = new WebGLCubeRenderTarget(this.size, {
       format: RGBAFormat,
       type: UnsignedByteType,
       minFilter: NearestFilter,

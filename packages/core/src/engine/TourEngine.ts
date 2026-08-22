@@ -2,21 +2,29 @@ import {
   BackSide,
   Box3,
   BoxGeometry,
+  BufferGeometry,
   Camera,
   DoubleSide,
+  Group,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
+  Quaternion,
   Scene,
+  ShaderMaterial,
   SphereGeometry,
   Vector3,
   WebGLRenderer,
   type Object3D,
   type Material,
   type Texture,
+  type XRTargetRaySpace,
 } from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { AuthorMode } from "../author/AuthorMode";
 import { loadConfig } from "../config/loader";
 import type { TourConfig, TourConfigInput } from "../config/schema";
@@ -26,6 +34,12 @@ import { TourEventEmitter, type TourEventMap } from "../events";
 import { HotspotLayer } from "../interaction/HotspotLayer";
 import { InteractionManager } from "../interaction/InteractionManager";
 import { NavigationManager, type TransitionOptions } from "../navigation/NavigationManager";
+import {
+  createDollhouseMaterial,
+  MAX_DOLLHOUSE_SOURCES,
+  type DollhouseSource,
+  type DollhouseTopView,
+} from "../rendering/DollhouseMaterial";
 import { PanoramaProjection } from "../rendering/PanoramaMaterial";
 import { PanoramaVisibilityMap } from "../rendering/PanoramaVisibilityMap";
 import { MeasurementLayer } from "../spatial/MeasurementLayer";
@@ -37,9 +51,31 @@ import {
 } from "../spatial/PlanRenderer";
 import { AssetManager } from "./AssetManager";
 import { VariantManager } from "./VariantManager";
+import { resolveXRRigPosition, resolveXRRigYaw } from "./xrMath";
 
 export type TourEngineState = "idle" | "loading" | "ready" | "transitioning" | "error";
-export type TourViewMode = "panorama" | "top";
+export type TourViewMode = "panorama" | "top" | "dollhouse";
+
+interface ViewTransition {
+  from: "panorama" | "dollhouse";
+  to: "panorama" | "dollhouse";
+  elapsed: number;
+  duration: number;
+  arcHeight: number;
+  startPosition: Vector3;
+  endPosition: Vector3;
+  startQuaternion: Quaternion;
+  endQuaternion: Quaternion;
+  startFov: number;
+  endFov: number;
+}
+
+export interface EnterVROptions {
+  /** Additional WebXR features that must be available. `local-floor` is always required. */
+  requiredFeatures?: XRSessionInit["requiredFeatures"];
+  /** Optional capabilities requested from the headset. */
+  optionalFeatures?: XRSessionInit["optionalFeatures"];
+}
 
 export interface TourEngineOptions {
   /** Element the canvas (and HTML overlay) is mounted into. */
@@ -78,11 +114,34 @@ export class TourEngine {
   private renderer: WebGLRenderer;
   private scene = new Scene();
   private camera: PerspectiveCamera;
+  private xrRig = new Group();
+  private xrControllers: Array<{
+    controller: XRTargetRaySpace;
+    ray: Line<BufferGeometry, LineBasicMaterial>;
+    connected: boolean;
+    onSelect: () => void;
+    onConnected: () => void;
+    onDisconnected: () => void;
+  }> = [];
+  private vrSession: XRSession | null = null;
+  private vrSupported: boolean | null = null;
+  private vrViewerOrigin: Vector3 | null = null;
+  private vrDesktopView: { yaw: number; pitch: number } | null = null;
+  private navigationPosition = new Vector3();
+  private scratchPosition = new Vector3();
+  private scratchDirection = new Vector3();
+  private scratchQuaternion = new Quaternion();
   private topCamera = new OrthographicCamera(-5, 5, 5, -5, 0.05, 1000);
+  private dollhouseCamera = new PerspectiveCamera(45, 1, 0.05, 1000);
+  private viewTransitionCamera = new PerspectiveCamera(60, 1, 0.025, 1000);
+  private viewTransition: ViewTransition | null = null;
+  private viewTransitionWaiters: Array<() => void> = [];
   private projection = new PanoramaProjection();
   private visibility: PanoramaVisibilityMap | null = null;
+  private dollhouseVisibility: PanoramaVisibilityMap | null = null;
   private controls: LookControls;
   private topControls: TopViewControls;
+  private dollhouseControls: OrbitControls;
   private interaction: InteractionManager | null = null;
   private hotspots: HotspotLayer | null = null;
   private navigation: NavigationManager | null = null;
@@ -94,19 +153,33 @@ export class TourEngine {
   private proxyRoot: Object3D | null = null;
   private visibilityRoot: Object3D | null = null;
   private bridgeRoot: Object3D | null = null;
+  private dollhouseRoot: Object3D | null = null;
+  private dollhouseUsesProxy = true;
+  private dollhouseMaterial: ShaderMaterial | null = null;
+  private dollhouseSourceIds: string[] = [];
+  private dollhousePreferredNodeId: string | null = null;
+  private dollhousePanoramaMix = 0;
+  private dollhousePreparation: Promise<void> | null = null;
+  private dollhouseLoadToken = 0;
   private bridgeMaterials: Array<{ material: MeshBasicMaterial; opacity: number }> = [];
   private bridgeFallbackReason: string | null = null;
   private proxyMeshes: Mesh[] = [];
-  private overviewMaterial: Material | null = null;
+  private overviewMaterial: ShaderMaterial | null = null;
   private panoramaMaterials = new Map<Mesh, Material | Material[]>();
   private overviewVisibility = new Map<Object3D, boolean>();
   private overviewHiddenObjects: Object3D[] = [];
+  private ceilingHiddenObjects = new Set<Object3D>();
+  private ceilingMeshes = new Set<Mesh>();
+  private ceilingMeshVisibility = new Map<Mesh, boolean>();
+  private ceilingFadeMaterials: Material[] = [];
+  private ceilingOpacity = 1;
+  private dollhouseHiddenObjects: Object3D[] = [];
   private generatedCeiling: Mesh | null = null;
   private topViewMesh: Mesh<PlaneGeometry, MeshBasicMaterial> | null = null;
   private topViewUrl: string | null = null;
   private topViewTextureReady = false;
   private topViewLoadToken = 0;
-  private proxyRootVisibilityBeforeTop = true;
+  private proxyRootVisibilityBeforeSpatial = true;
   private skysphere: Mesh | null = null;
   private resizeObserver: ResizeObserver;
   private animationFrame = 0;
@@ -144,8 +217,21 @@ export class TourEngine {
     this.container.appendChild(this.overlay);
 
     this.camera = new PerspectiveCamera(75, 1, 0.05, 1000);
+    this.xrRig.name = "meshtour_xr_rig";
+    this.scene.add(this.xrRig);
+    this.xrRig.add(this.camera);
+    this.renderer.xr.enabled = true;
+    this.renderer.xr.setReferenceSpaceType("local-floor");
+    this.setupXRControllers();
     this.controls = new LookControls(this.camera, canvas);
     this.topControls = new TopViewControls(this.topCamera, canvas);
+    this.dollhouseControls = new OrbitControls(this.dollhouseCamera, canvas);
+    this.dollhouseControls.enabled = false;
+    this.dollhouseControls.enableDamping = true;
+    this.dollhouseControls.dampingFactor = 0.08;
+    this.dollhouseControls.screenSpacePanning = false;
+    this.dollhouseControls.minPolarAngle = 0.2;
+    this.dollhouseControls.maxPolarAngle = Math.PI * 0.48;
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.container);
@@ -178,8 +264,144 @@ export class TourEngine {
     });
   }
 
+  private setupXRControllers(): void {
+    for (let index = 0; index < 2; index += 1) {
+      const controller = this.renderer.xr.getController(index);
+      const rayMaterial = new LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const ray = new Line(
+        new BufferGeometry().setFromPoints([new Vector3(), new Vector3(0, 0, -1)]),
+        rayMaterial,
+      );
+      ray.name = `meshtour_xr_ray_${index}`;
+      ray.scale.z = 6;
+      ray.visible = false;
+      ray.raycast = () => {};
+      controller.add(ray);
+      this.xrRig.add(controller);
+
+      const binding = {
+        controller,
+        ray,
+        connected: false,
+        onSelect: () => this.selectFromXRController(controller),
+        onConnected: () => {
+          binding.connected = true;
+          ray.visible = this.isVRActive();
+        },
+        onDisconnected: () => {
+          binding.connected = false;
+          ray.visible = false;
+        },
+      };
+      controller.addEventListener("select", binding.onSelect);
+      controller.addEventListener("connected", binding.onConnected);
+      controller.addEventListener("disconnected", binding.onDisconnected);
+      this.xrControllers.push(binding);
+    }
+  }
+
+  private selectFromXRController(controller: XRTargetRaySpace): void {
+    if (!this.vrSession || !this.interaction) return;
+    controller.updateMatrixWorld(true);
+    const origin = controller.getWorldPosition(this.scratchPosition);
+    const direction = this.scratchDirection
+      .set(0, 0, -1)
+      .applyQuaternion(controller.getWorldQuaternion(this.scratchQuaternion))
+      .normalize();
+    this.interaction.selectFromRay(origin, direction);
+  }
+
+  private updateXRControllerHover(): void {
+    if (!this.vrSession || !this.interaction) return;
+    const binding = this.xrControllers.find((candidate) => candidate.connected);
+    if (!binding) return;
+    binding.controller.updateMatrixWorld(true);
+    const origin = binding.controller.getWorldPosition(this.scratchPosition);
+    const direction = this.scratchDirection
+      .set(0, 0, -1)
+      .applyQuaternion(binding.controller.getWorldQuaternion(this.scratchQuaternion))
+      .normalize();
+    this.interaction.updateFromRay(origin, direction);
+  }
+
+  private applyNavigationPosition(position: Vector3): void {
+    this.navigationPosition.copy(position);
+    if (!this.vrSession) {
+      this.xrRig.position.set(0, 0, 0);
+      this.xrRig.rotation.set(0, 0, 0);
+      this.camera.position.copy(position);
+      return;
+    }
+
+    if (this.vrViewerOrigin) {
+      resolveXRRigPosition(
+        position,
+        this.vrViewerOrigin,
+        this.xrRig.quaternion,
+        this.xrRig.position,
+      );
+    } else {
+      this.xrRig.position.set(position.x, this.config?.spatial.overview.floorY ?? 0, position.z);
+    }
+    this.xrRig.updateMatrixWorld(true);
+  }
+
+  private calibrateVR(frame: XRFrame): void {
+    const referenceSpace = this.renderer.xr.getReferenceSpace();
+    if (!referenceSpace) return;
+    const pose = frame.getViewerPose(referenceSpace);
+    if (!pose) return;
+
+    const { position, orientation } = pose.transform;
+    this.scratchQuaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
+    this.camera.position.set(position.x, position.y, position.z);
+    this.camera.quaternion.copy(this.scratchQuaternion);
+    this.camera.updateMatrixWorld(true);
+    if (this.vrViewerOrigin) return;
+    this.vrViewerOrigin = new Vector3(position.x, position.y, position.z);
+    const rigYaw = resolveXRRigYaw(
+      this.vrDesktopView?.yaw ?? 0,
+      this.scratchQuaternion,
+      this.scratchDirection,
+    );
+    this.xrRig.rotation.set(0, rigYaw, 0);
+    this.applyNavigationPosition(this.navigationPosition);
+  }
+
+  private finishVRSession = (): void => {
+    const session = this.vrSession;
+    if (!session) return;
+    session.removeEventListener("end", this.finishVRSession);
+    this.vrSession = null;
+    this.vrViewerOrigin = null;
+    if (this.navigation) this.navigation.onPositionChange = null;
+    for (const binding of this.xrControllers) binding.ray.visible = false;
+    this.xrRig.position.set(0, 0, 0);
+    this.xrRig.rotation.set(0, 0, 0);
+    this.camera.position.copy(this.navigationPosition);
+    const view = this.vrDesktopView;
+    this.vrDesktopView = null;
+    if (view) this.controls.setYawPitch(view.yaw, view.pitch);
+    this.controls.enabled = this.viewMode === "panorama";
+    this.interaction?.setEnabled(!(this.navigation?.isTransitioning() ?? false));
+    this.interaction?.invalidate();
+    this.renderer.setAnimationLoop(null);
+    if (!this.disposed) {
+      this.lastTime = performance.now();
+      this.loop();
+    }
+    if (!this.disposed) this.events.emit("vrchange", { active: false });
+  };
+
   get state(): TourEngineState {
-    if (this.internalState === "ready" && this.navigation?.isTransitioning()) {
+    if (
+      this.internalState === "ready" &&
+      (this.viewTransition || this.navigation?.isTransitioning())
+    ) {
       return "transitioning";
     }
     return this.internalState;
@@ -196,7 +418,10 @@ export class TourEngine {
     return this.camera;
   }
   getActiveCamera(): Camera {
-    return this.viewMode === "top" ? this.topCamera : this.camera;
+    if (this.viewTransition) return this.viewTransitionCamera;
+    if (this.viewMode === "top") return this.topCamera;
+    if (this.viewMode === "dollhouse") return this.dollhouseCamera;
+    return this.camera;
   }
   getContainer(): HTMLElement {
     return this.container;
@@ -231,7 +456,7 @@ export class TourEngine {
 
       const startNode = this.options.initialNode ?? config.start ?? config.nodes[0]!.id;
       this.events.emit("loadprogress", { progress: 0.15 });
-      const [proxyRoot, , visibilityRoot, bridgeRoot] = await Promise.all([
+      const [proxyRoot, , visibilityRoot, bridgeRoot, dollhouseRoot] = await Promise.all([
         this.options.proxyMesh ?? this.assets.loadProxyMesh(),
         // Mesh decoding and the first panorama are independent. Loading them
         // together removes an avoidable network/decode waterfall on cold starts.
@@ -246,10 +471,18 @@ export class TourEngine {
           this.bridgeFallbackReason = `bridge asset failed to load (${String(error)})`;
           return null;
         }),
+        this.assets.loadDollhouseMesh().catch((error) => {
+          console.warn(
+            `MeshTour could not load the dedicated dollhouse mesh; using the interaction proxy: ${String(error)}`,
+          );
+          return null;
+        }),
       ]);
       this.proxyRoot = proxyRoot;
       this.visibilityRoot = visibilityRoot;
       this.bridgeRoot = bridgeRoot;
+      this.dollhouseRoot = dollhouseRoot ?? proxyRoot;
+      this.dollhouseUsesProxy = dollhouseRoot === null;
       this.ensureActive();
       this.events.emit("loadprogress", { progress: 0.5 });
       this.ensureCeiling(config);
@@ -262,6 +495,11 @@ export class TourEngine {
         this.visibilityRoot ?? this.proxyRoot,
       );
       if (this.bridgeRoot) this.setupBridge(this.bridgeRoot);
+      if (!this.dollhouseUsesProxy && this.dollhouseRoot) {
+        this.dollhouseRoot.name ||= "meshtour_dollhouse";
+        this.dollhouseRoot.visible = false;
+        this.scene.add(this.dollhouseRoot);
+      }
       this.setupSkysphere();
 
       this.interaction = new InteractionManager(
@@ -315,6 +553,7 @@ export class TourEngine {
         config.spatial.overview.floorY,
         worldBounds.isEmpty() ? config.spatial.overview.floorY + 3 : worldBounds.max.y,
       );
+      this.setupDollhouseCamera(worldBounds, config.spatial.overview.floorY);
       this.setupRenderedTopView(config, planBounds);
       this.measurements = new MeasurementLayer(
         this.scene,
@@ -340,6 +579,7 @@ export class TourEngine {
       this.loadRenderedTopView();
       this.lastTime = performance.now();
       this.loop();
+      void this.checkVRSupport();
       this.events.emit("loadprogress", { progress: 1 });
       this.events.emit("ready", undefined);
     } catch (cause) {
@@ -371,6 +611,10 @@ export class TourEngine {
       if (/(?:ceiling|roof)/i.test(object.name)) {
         hasCeiling = true;
         this.overviewHiddenObjects.push(object);
+        this.ceilingHiddenObjects.add(object);
+        object.traverse((child) => {
+          if ((child as Mesh).isMesh) this.ceilingMeshes.add(child as Mesh);
+        });
       }
     });
     const ceiling = config.spatial.overview.ceiling;
@@ -383,6 +627,8 @@ export class TourEngine {
     root.add(mesh);
     this.generatedCeiling = mesh;
     this.overviewHiddenObjects.push(mesh);
+    this.ceilingHiddenObjects.add(mesh);
+    this.ceilingMeshes.add(mesh);
   }
 
   private setupProxy(config: TourConfig): void {
@@ -407,6 +653,129 @@ export class TourEngine {
     });
     this.overviewMaterial = this.projection.createMaterial({ sourceVisibility: false });
     this.scene.add(root);
+  }
+
+  private setupDollhouseCamera(worldBounds: Box3, floorY: number): void {
+    const bounds = worldBounds.isEmpty()
+      ? new Box3(new Vector3(-2, floorY, -2), new Vector3(2, floorY + 3, 2))
+      : worldBounds;
+    const center = bounds.getCenter(new Vector3());
+    const size = bounds.getSize(new Vector3());
+    const radius = Math.max(2, size.length() * 0.5);
+    const target = new Vector3(center.x, floorY + Math.max(0.5, size.y * 0.32), center.z);
+    const direction = new Vector3(0.9, 0.82, 1).normalize();
+
+    this.dollhouseCamera.near = Math.max(0.025, radius / 200);
+    this.dollhouseCamera.far = Math.max(100, radius * 20);
+    this.dollhouseCamera.position.copy(target).addScaledVector(direction, radius * 2.45);
+    this.dollhouseCamera.updateProjectionMatrix();
+    this.dollhouseControls.target.copy(target);
+    this.dollhouseControls.minDistance = radius * 0.55;
+    this.dollhouseControls.maxDistance = radius * 5;
+    this.dollhouseControls.update();
+
+    if (!this.dollhouseUsesProxy && this.dollhouseRoot) {
+      const hiddenNames = new Set(this.config?.spatial.overview.hiddenMeshes ?? []);
+      this.dollhouseRoot.traverse((object) => {
+        if (/(?:ceiling|roof)/i.test(object.name) || hiddenNames.has(object.name)) {
+          this.dollhouseHiddenObjects.push(object);
+        }
+      });
+    }
+  }
+
+  /** Pick spatially distributed capture points when a tour has more sources than the shader cap. */
+  private selectDollhouseNodes() {
+    const nodes = this.config?.nodes ?? [];
+    if (nodes.length <= MAX_DOLLHOUSE_SOURCES) return nodes;
+    const currentId = this.navigation?.getCurrentNodeId() ?? this.config?.start;
+    const first = nodes.find((node) => node.id === currentId) ?? nodes[0]!;
+    const selected = [first];
+    const remaining = new Set(nodes.filter((node) => node !== first));
+    while (selected.length < MAX_DOLLHOUSE_SOURCES && remaining.size > 0) {
+      let best = [...remaining][0]!;
+      let bestDistance = -1;
+      for (const candidate of remaining) {
+        const candidatePosition = new Vector3().fromArray(candidate.position);
+        const nearest = Math.min(
+          ...selected.map((node) =>
+            candidatePosition.distanceToSquared(new Vector3().fromArray(node.position)),
+          ),
+        );
+        if (nearest > bestDistance) {
+          best = candidate;
+          bestDistance = nearest;
+        }
+      }
+      selected.push(best);
+      remaining.delete(best);
+    }
+    return selected;
+  }
+
+  private prepareDollhouse(): Promise<void> {
+    if (this.dollhousePreparation) return this.dollhousePreparation;
+    if (!this.dollhouseUsesProxy || !this.assets || !this.proxyRoot || !this.config) {
+      return Promise.resolve();
+    }
+
+    this.dollhouseVisibility ??= new PanoramaVisibilityMap(
+      this.renderer,
+      this.visibilityRoot ?? this.proxyRoot,
+      256,
+    );
+    const dollhouseVisibility = this.dollhouseVisibility;
+    const token = ++this.dollhouseLoadToken;
+    const nodes = this.selectDollhouseNodes();
+    const sourcePromise = Promise.all(
+      nodes.map(async (node): Promise<DollhouseSource> => {
+        const center = new Vector3().fromArray(node.position);
+        const texture = await this.assets!.ensureDollhousePreview(node.id);
+        this.ensureActive();
+        const depth = dollhouseVisibility.capture(node.id, center);
+        this.assets!.preupload(texture);
+        this.assets!.preupload(depth);
+        return { nodeId: node.id, texture, depth, center, panorama: node.panorama };
+      }),
+    );
+    const topViewConfig = this.config.spatial.overview.topView;
+    const topViewPromise: Promise<DollhouseTopView | undefined> = topViewConfig?.dollhouseProjection
+      ? this.assets.ensureAuxiliaryTexture(topViewConfig.url).then((texture) => {
+          this.ensureActive();
+          this.assets!.preupload(texture);
+          return {
+            texture,
+            bounds:
+              topViewConfig.bounds ??
+              this.config!.spatial.overview.bounds ??
+              resolvePlanBounds(this.proxyRoot!, undefined),
+          };
+        })
+      : Promise.resolve(undefined);
+    this.dollhousePreparation = Promise.all([sourcePromise, topViewPromise])
+      .then(([sources, topView]) => {
+        if (this.disposed || token !== this.dollhouseLoadToken || !this.config) return;
+        this.dollhouseMaterial?.dispose();
+        this.dollhouseMaterial = createDollhouseMaterial(
+          sources,
+          this.config.rendering.background,
+          topView,
+        );
+        this.dollhouseSourceIds = sources.map((source) => source.nodeId);
+        this.applyDollhouseTextureBlend();
+        if (this.viewMode === "dollhouse") {
+          this.applyDollhouseMaterial(this.dollhouseMaterial);
+          this.interaction?.invalidate();
+        }
+      })
+      .catch((error) => {
+        if (!this.disposed) {
+          console.warn(
+            `MeshTour could not prepare the multi-panorama dollhouse texture; using the active panorama: ${String(error)}`,
+          );
+        }
+      });
+    return this.dollhousePreparation;
   }
 
   private setupRenderedTopView(
@@ -468,6 +837,7 @@ export class TourEngine {
       sourceVisibility: false,
     });
     this.skysphere = new Mesh(new SphereGeometry(150, 48, 24), material);
+    this.skysphere.name = "meshtour_panorama_skysphere";
     this.skysphere.renderOrder = -1;
     this.skysphere.frustumCulled = false;
     this.skysphere.raycast = () => {};
@@ -556,29 +926,245 @@ export class TourEngine {
   private loop = (): void => {
     if (this.disposed) return;
     this.animationFrame = requestAnimationFrame(this.loop);
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastTime) / 1000);
-    this.lastFrameMs = now - this.lastTime;
-    this.lastTime = now;
+    this.tick(performance.now());
+  };
 
+  private xrLoop = (time: DOMHighResTimeStamp, frame: XRFrame): void => {
+    if (this.disposed) return;
+    this.tick(time, frame);
+  };
+
+  private beginViewTransition(
+    fromCamera: PerspectiveCamera,
+    toCamera: PerspectiveCamera,
+    from: "panorama" | "dollhouse",
+    to: "panorama" | "dollhouse",
+  ): boolean {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+
+    this.scene.updateMatrixWorld(true);
+    const startPosition = fromCamera.getWorldPosition(new Vector3());
+    const endPosition = toCamera.getWorldPosition(new Vector3());
+    const startQuaternion = fromCamera.getWorldQuaternion(new Quaternion());
+    const endQuaternion = toCamera.getWorldQuaternion(new Quaternion());
+    const distance = startPosition.distanceTo(endPosition);
+    const duration = Math.min(1.85, Math.max(1.25, 1 + distance * 0.045));
+
+    this.viewTransitionCamera.position.copy(startPosition);
+    this.viewTransitionCamera.quaternion.copy(startQuaternion);
+    this.viewTransitionCamera.fov = fromCamera.fov;
+    this.viewTransitionCamera.aspect = toCamera.aspect;
+    this.viewTransitionCamera.near = Math.min(fromCamera.near, toCamera.near);
+    this.viewTransitionCamera.far = Math.max(fromCamera.far, toCamera.far);
+    this.viewTransitionCamera.layers.mask = fromCamera.layers.mask | toCamera.layers.mask;
+    this.viewTransitionCamera.updateProjectionMatrix();
+    this.viewTransition = {
+      from,
+      to,
+      elapsed: 0,
+      duration,
+      arcHeight: Math.min(2.2, distance * 0.08),
+      startPosition,
+      endPosition,
+      startQuaternion,
+      endQuaternion,
+      startFov: fromCamera.fov,
+      endFov: toCamera.fov,
+    };
+    return true;
+  }
+
+  private updateViewTransition(dt: number): boolean {
+    const transition = this.viewTransition;
+    if (!transition) return false;
+    transition.elapsed += dt;
+    const linear = Math.min(1, transition.elapsed / transition.duration);
+    // Quintic smootherstep makes velocity and acceleration reach zero at both ends.
+    const eased = linear * linear * linear * (linear * (linear * 6 - 15) + 10);
+    this.viewTransitionCamera.position.lerpVectors(
+      transition.startPosition,
+      transition.endPosition,
+      eased,
+    );
+    this.viewTransitionCamera.position.y += Math.sin(Math.PI * eased) * transition.arcHeight;
+    this.viewTransitionCamera.quaternion.slerpQuaternions(
+      transition.startQuaternion,
+      transition.endQuaternion,
+      eased,
+    );
+    this.viewTransitionCamera.fov =
+      transition.startFov + (transition.endFov - transition.startFov) * eased;
+    this.viewTransitionCamera.updateProjectionMatrix();
+    this.setDollhousePanoramaMix(
+      transition.to === "panorama"
+        ? smoothstep(0.08, 0.92, eased)
+        : 1 - smoothstep(0.08, 0.82, eased),
+    );
+    this.setCeilingOpacity(
+      transition.to === "panorama" ? smoothstep(0.92, 1, linear) : 1 - smoothstep(0, 0.08, linear),
+    );
+    if (this.skysphere) {
+      if (transition.to === "dollhouse") {
+        this.skysphere.visible = false;
+      } else if (linear >= 1) {
+        // The camera is already at the panorama node, so revealing the
+        // fallback background here cannot appear behind an external dollhouse.
+        this.skysphere.visible = true;
+      }
+    }
+    if (linear < 1) return true;
+
+    this.viewTransition = null;
+    if (transition.to === "panorama") this.completePanoramaHandoff();
+    else {
+      this.setDollhousePanoramaMix(0);
+      this.setCeilingOpacity(0);
+    }
+    this.configureViewInteraction(false);
+    this.events.emit("viewtransitionend", { from: transition.from, to: transition.to });
+    for (const resolve of this.viewTransitionWaiters.splice(0)) resolve();
+    return true;
+  }
+
+  private configureViewInteraction(animating: boolean): void {
+    const panorama = this.viewMode === "panorama";
+    const top = this.viewMode === "top";
+    const dollhouse = this.viewMode === "dollhouse";
+    const interactive = !animating && !(this.navigation?.isTransitioning() ?? false);
+    this.controls.enabled = panorama && interactive && !this.vrSession;
+    this.topControls.enabled = top && interactive;
+    this.dollhouseControls.enabled = dollhouse && interactive;
+    this.interaction?.setCamera(this.getActiveCamera());
+    this.interaction?.setProxyPickingEnabled(panorama);
+    this.interaction?.setEnabled(interactive);
+    this.hotspots?.setVisible(panorama && interactive && this.hotspotsRequestedVisible);
+    this.navigation?.setMarkersVisible(panorama ? interactive : true, !panorama, dollhouse);
+  }
+
+  private waitForViewTransition(): Promise<void> {
+    if (!this.viewTransition) return Promise.resolve();
+    return new Promise((resolve) => this.viewTransitionWaiters.push(resolve));
+  }
+
+  private setDollhousePreferredNode(nodeId: string | null): void {
+    this.dollhousePreferredNodeId = nodeId;
+    this.applyDollhouseTextureBlend();
+  }
+
+  private setDollhousePanoramaMix(value: number): void {
+    this.dollhousePanoramaMix = Math.min(1, Math.max(0, value));
+    this.applyDollhouseTextureBlend();
+  }
+
+  private applyDollhouseTextureBlend(): void {
+    const uniforms = this.dollhouseMaterial?.uniforms;
+    if (!uniforms) return;
+    uniforms.uPanoramaMix!.value = this.dollhousePanoramaMix;
+    this.dollhouseSourceIds.forEach((nodeId, index) => {
+      uniforms[`uPreferred${index}`]!.value = nodeId === this.dollhousePreferredNodeId ? 1 : 0;
+    });
+  }
+
+  private captureCeilingVisibility(): void {
+    this.ceilingMeshVisibility.clear();
+    for (const mesh of this.ceilingMeshes) {
+      this.ceilingMeshVisibility.set(mesh, mesh.visible);
+    }
+  }
+
+  private applyDollhouseMaterial(material: Material): void {
+    for (const mesh of this.proxyMeshes) mesh.material = material;
+    this.disposeCeilingFadeMaterials();
+    for (const mesh of this.ceilingMeshes) {
+      // Keep the ceiling on the settled panorama projection while it fades.
+      // The multi-source dollhouse shader may legitimately reject the ceiling
+      // as uncovered, which would make it pop out before opacity can animate.
+      const sourceMaterial = this.panoramaMaterials.get(mesh) ?? mesh.material;
+      const materials = Array.isArray(sourceMaterial) ? sourceMaterial : [sourceMaterial];
+      const faded = materials.map((source) => {
+        const clone =
+          source instanceof ShaderMaterial
+            ? new ShaderMaterial({
+                uniforms: {
+                  ...source.uniforms,
+                  uOpacity: { value: this.ceilingOpacity },
+                },
+                defines: { ...source.defines },
+                vertexShader: source.vertexShader,
+                fragmentShader: source.fragmentShader,
+                glslVersion: source.glslVersion,
+                side: source.side,
+                depthTest: source.depthTest,
+                depthWrite: false,
+                transparent: true,
+              })
+            : source.clone();
+        clone.name = `${source.name || source.type}_ceiling_fade`;
+        clone.transparent = true;
+        clone.depthWrite = false;
+        clone.toneMapped = source.toneMapped;
+        clone.needsUpdate = true;
+        this.ceilingFadeMaterials.push(clone);
+        return clone;
+      });
+      mesh.material = Array.isArray(sourceMaterial) ? faded : faded[0]!;
+    }
+    this.setCeilingOpacity(this.ceilingOpacity);
+  }
+
+  private setCeilingOpacity(value: number): void {
+    this.ceilingOpacity = Math.min(1, Math.max(0, value));
+    for (const material of this.ceilingFadeMaterials) {
+      if (material instanceof ShaderMaterial && material.uniforms.uOpacity) {
+        material.uniforms.uOpacity.value = this.ceilingOpacity;
+      } else {
+        material.opacity = this.ceilingOpacity;
+      }
+    }
+    for (const [mesh, originallyVisible] of this.ceilingMeshVisibility) {
+      mesh.visible = originallyVisible && this.ceilingOpacity > 0.001;
+    }
+  }
+
+  private disposeCeilingFadeMaterials(): void {
+    for (const material of this.ceilingFadeMaterials) material.dispose();
+    this.ceilingFadeMaterials = [];
+  }
+
+  private tick(time: DOMHighResTimeStamp, frame?: XRFrame): void {
+    if (frame && this.vrSession) this.calibrateVR(frame);
+    const dt = Math.min(0.05, (time - this.lastTime) / 1000);
+    this.lastFrameMs = time - this.lastTime;
+    this.lastTime = time;
+
+    const viewTransitionMoved = this.updateViewTransition(dt);
     const viewMoved = this.controls.update(dt);
+    if (this.viewMode === "dollhouse" && !this.viewTransition) {
+      this.dollhouseControls.update();
+      this.interaction?.invalidate();
+    }
     const transitionMoved = this.navigation?.isTransitioning() ?? false;
     this.navigation?.update(dt);
-    if (viewMoved || transitionMoved) this.interaction?.invalidate();
+    if (viewMoved || viewTransitionMoved || transitionMoved) this.interaction?.invalidate();
     this.interaction?.update();
+    this.updateXRControllerHover();
     this.hotspots?.update(dt);
     this.authorOverlay?.update();
     this.measurements?.update();
-    if (this.skysphere) this.skysphere.position.copy(this.camera.position);
+    if (this.skysphere) this.camera.getWorldPosition(this.skysphere.position);
     this.renderer.render(this.scene, this.getActiveCamera());
-  };
+  }
 
   private resize(): void {
     const width = this.container.clientWidth || 1;
     const height = this.container.clientHeight || 1;
-    this.renderer.setSize(width, height, false);
+    if (!this.renderer.xr.isPresenting) this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.dollhouseCamera.aspect = width / height;
+    this.dollhouseCamera.updateProjectionMatrix();
+    this.viewTransitionCamera.aspect = width / height;
+    this.viewTransitionCamera.updateProjectionMatrix();
     this.topControls.resize(width, height);
   }
 
@@ -594,10 +1180,100 @@ export class TourEngine {
     this.events.off(event, listener);
   }
 
+  /** Detect immersive WebXR support. Requires a secure context (HTTPS or localhost). */
+  async checkVRSupport(): Promise<boolean> {
+    let supported = false;
+    try {
+      const xr = navigator.xr;
+      supported =
+        window.isSecureContext &&
+        Boolean(xr) &&
+        Boolean(await xr?.isSessionSupported("immersive-vr"));
+    } catch {
+      supported = false;
+    }
+    if (this.vrSupported !== supported) {
+      this.vrSupported = supported;
+      if (!this.disposed) this.events.emit("vrsupportchange", { supported });
+    }
+    return supported;
+  }
+
+  getVRSupported(): boolean | null {
+    return this.vrSupported;
+  }
+
+  isVRActive(): boolean {
+    return this.vrSession !== null;
+  }
+
+  /** Enter immersive VR. Must be called directly from a user gesture. */
+  async enterVR(options: EnterVROptions = {}): Promise<void> {
+    if (this.vrSession) return;
+    if (this.internalState !== "ready") throw new Error("Engine is not ready");
+    if (!(await this.checkVRSupport()) || !navigator.xr) {
+      throw new Error("Immersive WebXR is unavailable; use a supported headset browser over HTTPS");
+    }
+
+    if (this.viewMode !== "panorama") this.setViewMode("panorama");
+    const requiredFeatures = Array.from(
+      new Set(["local-floor", ...(options.requiredFeatures ?? [])]),
+    );
+    const optionalFeatures = Array.from(
+      new Set(["bounded-floor", "hand-tracking", ...(options.optionalFeatures ?? [])]),
+    );
+    const session = await navigator.xr.requestSession("immersive-vr", {
+      requiredFeatures,
+      optionalFeatures,
+    });
+
+    this.vrSession = session;
+    this.vrViewerOrigin = null;
+    this.vrDesktopView = this.getView();
+    this.navigation?.getPosition(this.navigationPosition);
+    if (this.navigation) {
+      this.navigation.onPositionChange = (position) => this.applyNavigationPosition(position);
+    }
+    this.controls.enabled = false;
+    this.interaction?.setEnabled(false);
+    this.interaction?.setEnabled(true);
+    this.applyNavigationPosition(this.navigationPosition);
+    cancelAnimationFrame(this.animationFrame);
+    this.renderer.setAnimationLoop(this.xrLoop);
+    try {
+      await this.renderer.xr.setSession(session);
+      session.addEventListener("end", this.finishVRSession);
+      for (const binding of this.xrControllers) binding.ray.visible = binding.connected;
+      this.events.emit("vrchange", { active: true });
+    } catch (error) {
+      this.finishVRSession();
+      await session.end().catch(() => {});
+      this.renderer.setAnimationLoop(null);
+      throw error;
+    }
+  }
+
+  async exitVR(): Promise<void> {
+    await this.vrSession?.end();
+  }
+
   async goToNode(nodeId: string, options?: TransitionOptions): Promise<void> {
     if (!this.navigation) throw new Error("Engine not started");
-    if (this.viewMode === "top") this.setViewMode("panorama");
-    await this.navigation.goToNode(nodeId, options);
+    if (this.viewMode === "dollhouse") {
+      // A dollhouse marker represents the destination itself. Re-anchor the
+      // hidden panorama first, then fly directly into that location.
+      if (nodeId !== this.navigation.getCurrentNodeId()) {
+        await this.navigation.goToNode(nodeId, { ...options, instant: true });
+      }
+      this.setViewMode("panorama");
+      await this.waitForViewTransition();
+      return;
+    }
+    if (this.viewMode !== "panorama") this.setViewMode("panorama");
+    await this.navigation.goToNode(
+      nodeId,
+      this.vrSession ? { ...options, instant: options?.instant ?? true } : options,
+    );
   }
 
   getCurrentNode(): string | null {
@@ -621,7 +1297,7 @@ export class TourEngine {
 
   setHotspotsVisible(visible: boolean): void {
     this.hotspotsRequestedVisible = visible;
-    this.hotspots?.setVisible(visible && this.viewMode === "panorama");
+    this.hotspots?.setVisible(visible && this.viewMode === "panorama" && !this.viewTransition);
   }
 
   getViewMode(): TourViewMode {
@@ -629,46 +1305,130 @@ export class TourEngine {
   }
 
   setViewMode(mode: TourViewMode): void {
+    if (this.vrSession && mode !== "panorama") return;
     if (mode === this.viewMode || !this.proxyRoot) return;
+    const fromCamera = this.getActiveCamera();
+    if (this.viewTransition) {
+      const interrupted = this.viewTransition;
+      this.viewTransition = null;
+      if (interrupted.to === "panorama") this.completePanoramaHandoff();
+      else {
+        this.setDollhousePanoramaMix(0);
+        this.setCeilingOpacity(0);
+      }
+      this.events.emit("viewtransitionend", { from: interrupted.from, to: interrupted.to });
+      for (const resolve of this.viewTransitionWaiters.splice(0)) resolve();
+    }
+    const previousMode = this.viewMode;
+    const cameraFlight =
+      (previousMode === "panorama" && mode === "dollhouse") ||
+      (previousMode === "dollhouse" && mode === "panorama");
+    if (previousMode !== "panorama" && !cameraFlight) this.restorePanoramaScene();
     this.viewMode = mode;
     const top = mode === "top";
-    this.controls.enabled = !top;
-    this.topControls.enabled = top;
-    this.interaction?.setCamera(top ? this.topCamera : this.camera);
-    this.interaction?.setProxyPickingEnabled(!top);
-    const interactive = !(this.navigation?.isTransitioning() ?? false);
-    this.interaction?.setEnabled(interactive);
-    this.hotspots?.setVisible(!top && this.hotspotsRequestedVisible);
-    this.navigation?.setMarkersVisible(interactive, top);
-    if (this.skysphere) this.skysphere.visible = !top;
+    const dollhouse = mode === "dollhouse";
+    const panorama = mode === "panorama";
+    if (this.skysphere) {
+      this.skysphere.visible = panorama && !cameraFlight;
+    }
 
-    if (top) {
-      this.proxyRootVisibilityBeforeTop = this.proxyRoot.visible;
+    if (cameraFlight) {
+      this.setDollhousePreferredNode(this.navigation?.getCurrentNodeId() ?? null);
+      this.setDollhousePanoramaMix(previousMode === "panorama" ? 1 : 0);
+      if (previousMode === "panorama") this.captureCeilingVisibility();
+      this.setCeilingOpacity(previousMode === "panorama" ? 1 : 0);
+    }
+
+    if (!panorama) {
+      this.proxyRootVisibilityBeforeSpatial = this.proxyRoot.visible;
       this.panoramaMaterials.clear();
       for (const mesh of this.proxyMeshes) {
         this.panoramaMaterials.set(mesh, mesh.material);
-        if (this.overviewMaterial) mesh.material = this.overviewMaterial;
       }
       this.overviewVisibility.clear();
       for (const object of this.overviewHiddenObjects) {
         this.overviewVisibility.set(object, object.visible);
-        object.visible = false;
+        const fadeCeiling = dollhouse && cameraFlight && this.ceilingHiddenObjects.has(object);
+        if (!fadeCeiling) object.visible = false;
+      }
+    }
+
+    if (top) {
+      for (const mesh of this.proxyMeshes) {
+        if (this.overviewMaterial) mesh.material = this.overviewMaterial;
       }
       this.topControls.reset();
       if (this.topViewMesh && this.topViewTextureReady) {
         this.proxyRoot.visible = false;
         this.topViewMesh.visible = true;
       }
-    } else {
-      if (this.topViewMesh) this.topViewMesh.visible = false;
-      this.proxyRoot.visible = this.proxyRootVisibilityBeforeTop;
-      for (const [mesh, material] of this.panoramaMaterials) mesh.material = material;
-      this.panoramaMaterials.clear();
-      for (const [object, visible] of this.overviewVisibility) object.visible = visible;
-      this.overviewVisibility.clear();
+    } else if (dollhouse) {
+      if (this.dollhouseUsesProxy) {
+        this.proxyRoot.visible = true;
+        const material = this.dollhouseMaterial ?? this.overviewMaterial;
+        if (material) this.applyDollhouseMaterial(material);
+        void this.prepareDollhouse();
+      } else if (this.dollhouseRoot) {
+        this.proxyRoot.visible = false;
+        this.dollhouseRoot.visible = true;
+        for (const object of this.dollhouseHiddenObjects) {
+          this.overviewVisibility.set(object, object.visible);
+          object.visible = false;
+        }
+      }
+      this.dollhouseControls.update();
+    }
+    let animating = false;
+    if (cameraFlight && fromCamera instanceof PerspectiveCamera) {
+      // Flush residual drag inertia before capturing the panorama endpoint.
+      this.controls.setYawPitch(this.controls.yaw, this.controls.pitch);
+      const targetCamera = panorama ? this.camera : this.dollhouseCamera;
+      animating = this.beginViewTransition(
+        fromCamera,
+        targetCamera,
+        previousMode as "panorama" | "dollhouse",
+        panorama ? "panorama" : "dollhouse",
+      );
+      if (!animating && panorama) this.completePanoramaHandoff();
+      else if (!animating) {
+        this.setDollhousePanoramaMix(0);
+        this.setCeilingOpacity(0);
+      }
+    }
+    this.configureViewInteraction(animating);
+    if (animating) {
+      this.events.emit("viewtransitionstart", {
+        from: previousMode,
+        to: mode,
+      });
     }
     this.interaction?.invalidate();
     this.events.emit("viewmodechange", { mode });
+  }
+
+  private restorePanoramaScene(restoreVisibility = true): void {
+    if (!this.proxyRoot) return;
+    if (this.topViewMesh) this.topViewMesh.visible = false;
+    if (!this.dollhouseUsesProxy && this.dollhouseRoot) this.dollhouseRoot.visible = false;
+    this.proxyRoot.visible = this.proxyRootVisibilityBeforeSpatial;
+    for (const [mesh, material] of this.panoramaMaterials) mesh.material = material;
+    this.disposeCeilingFadeMaterials();
+    this.panoramaMaterials.clear();
+    if (restoreVisibility) this.restoreSpatialVisibility();
+  }
+
+  private completePanoramaHandoff(): void {
+    this.setDollhousePanoramaMix(1);
+    this.restorePanoramaScene();
+    if (this.skysphere) this.skysphere.visible = true;
+  }
+
+  private restoreSpatialVisibility(): void {
+    for (const [object, visible] of this.overviewVisibility) object.visible = visible;
+    this.overviewVisibility.clear();
+    for (const [mesh, visible] of this.ceilingMeshVisibility) mesh.visible = visible;
+    this.ceilingMeshVisibility.clear();
+    this.ceilingOpacity = 1;
   }
 
   getPlanBounds() {
@@ -768,24 +1528,45 @@ export class TourEngine {
     if (this.disposed) return;
     this.disposed = true;
     this.topViewLoadToken += 1;
+    this.dollhouseLoadToken += 1;
+    this.viewTransition = null;
+    for (const resolve of this.viewTransitionWaiters.splice(0)) resolve();
     cancelAnimationFrame(this.animationFrame);
+    this.renderer.setAnimationLoop(null);
+    if (this.vrSession) {
+      this.vrSession.removeEventListener("end", this.finishVRSession);
+      void this.vrSession.end();
+      this.vrSession = null;
+    }
     this.resizeObserver.disconnect();
     this.authorOverlay?.dispose();
     this.measurements?.dispose();
     this.hotspots?.dispose();
     this.navigation?.dispose();
     this.visibility?.dispose();
+    this.dollhouseVisibility?.dispose();
     this.interaction?.dispose();
     this.assets?.dispose();
     this.pendingTextureUpgrades = [];
     this.controls.dispose();
     this.topControls.dispose();
+    this.dollhouseControls.dispose();
     this.projection.dispose();
+    this.dollhouseMaterial?.dispose();
     this.topViewMesh?.geometry.dispose();
     this.topViewMesh?.material.dispose();
     this.topViewMesh?.removeFromParent();
     this.skysphere?.geometry.dispose();
     this.generatedCeiling?.geometry.dispose();
+    for (const binding of this.xrControllers) {
+      binding.controller.removeEventListener("select", binding.onSelect);
+      binding.controller.removeEventListener("connected", binding.onConnected);
+      binding.controller.removeEventListener("disconnected", binding.onDisconnected);
+      binding.ray.geometry.dispose();
+      binding.ray.material.dispose();
+      binding.controller.removeFromParent();
+    }
+    this.xrControllers = [];
     this.events.removeAllListeners();
     this.renderer.dispose();
     this.renderer.domElement.remove();

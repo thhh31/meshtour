@@ -18,7 +18,14 @@ export interface TourEventMap {
   interactableclick: { id: string; point: [number, number, number] };
   variantchange: { configurableId: string; variantId: string };
   viewmodechange: { mode: TourViewMode };
+  /** Camera flight between a panorama location and the spatial dollhouse. */
+  viewtransitionstart: { from: TourViewMode; to: TourViewMode };
+  viewtransitionend: { from: TourViewMode; to: TourViewMode };
   measurementschange: { visible: boolean };
+  /** Availability of immersive WebXR on the current browser/device. */
+  vrsupportchange: { supported: boolean };
+  /** Entered or left an immersive VR session. */
+  vrchange: { active: boolean };
 }
 
 type Listener<T> = (payload: T) => void;
