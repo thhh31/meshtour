@@ -41,12 +41,14 @@ class TourNode:
 
 
 NODES = (
-    # Three captures follow the apartment's open circulation line. They stay
+    # Five captures follow the apartment's open circulation line. They stay
     # clear of the dining table, sofa, lounge chair, pouf, and stair edge so
     # both adjacent and direct point-to-point moves remain visually plausible.
     TourNode("kitchen", "Kitchen & Dining", (4.10, 3.20, 1.62), 2.04),
     TourNode("living", "Living Room", (3.40, 5.35, 1.62), -0.295),
     TourNode("lounge", "Library Lounge", (3.35, 8.75, 1.62), -2.075),
+    TourNode("living-window", "Living Window", (0.981, 6.042, 1.62), 0.0),
+    TourNode("kitchen-window", "Kitchen Window", (0.828, 1.759, 1.62), 0.0),
 )
 
 # Shared floor anchors for navigation markers, keyed by their destination.
@@ -55,6 +57,8 @@ LINK_TARGET_ANCHORS: dict[str, tuple[float, float, float]] = {
     "kitchen": (3.688, 0.0, -3.142),
     "living": (3.4, 0.0, -5.35),
     "lounge": (3.932, 0.0, -9.193),
+    "living-window": (0.981, 0.0, -6.042),
+    "kitchen-window": (0.828, 0.0, -1.759),
 }
 
 # Per-capture alignment offset authored against the proxy wireframe. Blender's
@@ -95,7 +99,7 @@ INTERACTABLE_GROUPS: dict[str, tuple[str, ...]] = {
 # their silhouettes to contribute stronger parallax.
 VISUAL_PROXY_GROUPS: dict[str, tuple[str, ...]] = {
     # Retain the silhouettes that shape parallax while walking between the
-    # three captures. These remain non-interactive but prevent large pieces of
+    # five captures. These remain non-interactive but prevent large pieces of
     # furniture from being painted onto the walls/floor during transitions.
     "visual_dining_chairs": (
         "Circle",
@@ -127,6 +131,7 @@ PROXY_GROUP_TARGETS = {
     "visual_dining_chairs": 2_400,
     "visual_library": 1_600,
     "visual_side_tables": 800,
+    "int_floor": 500,
 }
 
 
@@ -140,6 +145,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples", type=int, default=256)
     parser.add_argument("--node", action="append", dest="nodes")
     parser.add_argument("--save-clean-blend")
+    parser.add_argument(
+        "--property-configurator",
+        action="store_true",
+        help="Export int_floor alongside the existing kitchen target for Italian Flat v4.",
+    )
     return parser.parse_args(argv)
 
 
@@ -362,7 +372,7 @@ def make_decimated_group(
     return joined
 
 
-def build_proxy_collection() -> bpy.types.Collection:
+def build_proxy_collection(property_configurator: bool = False) -> bpy.types.Collection:
     old = bpy.data.collections.get("MeshTourProxy")
     if old is not None:
         for obj in list(old.objects):
@@ -375,26 +385,42 @@ def build_proxy_collection() -> bpy.types.Collection:
     for source in bpy.context.scene.objects:
         if source.type != "MESH":
             continue
+        structural_names = STRUCTURAL_NAMES - ({"Floor Basement Floor"} if property_configurator else set())
         if (
-            source.name in STRUCTURAL_NAMES
+            source.name in structural_names
             or source.name.startswith(STRUCTURAL_PREFIXES)
             or source.name.startswith(CEILING_PREFIXES)
         ):
             copy_mesh_object(source, collection)
 
-    for name, patterns in {**INTERACTABLE_GROUPS, **VISUAL_PROXY_GROUPS}.items():
+    groups = {**INTERACTABLE_GROUPS, **VISUAL_PROXY_GROUPS}
+    if property_configurator:
+        groups["int_floor"] = ("Floor Basement Floor",)
+    for name, patterns in groups.items():
         matches = [
             source
             for source in bpy.context.scene.objects
             if source.type == "MESH" and object_matches(source.name, patterns)
         ]
+        if property_configurator and name == "int_kitchen":
+            # The projected finish layer contains cabinet fronts only. Keeping
+            # unrelated kitchen pieces out prevents joined proxy triangles
+            # from sampling finish pixels onto worktops and carcasses.
+            matches = [
+                source
+                for source in matches
+                if any(
+                    slot.material is not None and slot.material.name == "Anta Cucina"
+                    for slot in source.material_slots
+                )
+            ]
         make_decimated_group(name, matches, collection, PROXY_GROUP_TARGETS[name])
 
     return collection
 
 
-def export_proxy(output: Path) -> dict[str, int]:
-    collection = build_proxy_collection()
+def export_proxy(output: Path, property_configurator: bool = False) -> dict[str, int]:
+    collection = build_proxy_collection(property_configurator)
     bpy.ops.object.select_all(action="DESELECT")
     objects = list(collection.objects)
     for obj in sorted(objects, key=lambda item: item.name):
@@ -520,6 +546,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/sofa/terracotta/living_4k.png",
                             "lounge": "layers/sofa/terracotta/lounge_4k.png",
+                            "living-window": "layers/sofa/terracotta/living-window_4k.png",
+                            "kitchen-window": "layers/sofa/terracotta/kitchen-window_4k.png",
                         },
                     },
                     {
@@ -529,6 +557,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/sofa/ivory-boucle/living_4k.png",
                             "lounge": "layers/sofa/ivory-boucle/lounge_4k.png",
+                            "living-window": "layers/sofa/ivory-boucle/living-window_4k.png",
+                            "kitchen-window": "layers/sofa/ivory-boucle/kitchen-window_4k.png",
                         },
                     },
                     {
@@ -538,6 +568,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/sofa/forest-velvet/living_4k.png",
                             "lounge": "layers/sofa/forest-velvet/lounge_4k.png",
+                            "living-window": "layers/sofa/forest-velvet/living-window_4k.png",
+                            "kitchen-window": "layers/sofa/forest-velvet/kitchen-window_4k.png",
                         },
                     },
                 ],
@@ -556,6 +588,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/rug/sand-wool/living_4k.png",
                             "lounge": "layers/rug/sand-wool/lounge_4k.png",
+                            "living-window": "layers/rug/sand-wool/living-window_4k.png",
+                            "kitchen-window": "layers/rug/sand-wool/kitchen-window_4k.png",
                         },
                     },
                     {
@@ -565,6 +599,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/rug/sage-weave/living_4k.png",
                             "lounge": "layers/rug/sage-weave/lounge_4k.png",
+                            "living-window": "layers/rug/sage-weave/living-window_4k.png",
+                            "kitchen-window": "layers/rug/sage-weave/kitchen-window_4k.png",
                         },
                     },
                     {
@@ -574,6 +610,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/rug/charcoal-geometric/living_4k.png",
                             "lounge": "layers/rug/charcoal-geometric/lounge_4k.png",
+                            "living-window": "layers/rug/charcoal-geometric/living-window_4k.png",
+                            "kitchen-window": "layers/rug/charcoal-geometric/kitchen-window_4k.png",
                         },
                     },
                 ],
@@ -592,6 +630,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/chair/moss-velvet/living_4k.png",
                             "lounge": "layers/chair/moss-velvet/lounge_4k.png",
+                            "living-window": "layers/chair/moss-velvet/living-window_4k.png",
+                            "kitchen-window": "layers/chair/moss-velvet/kitchen-window_4k.png",
                         },
                     },
                     {
@@ -601,6 +641,8 @@ def write_tour_config(output: Path) -> None:
                         "layers": {
                             "living": "layers/chair/cognac-leather/living_4k.png",
                             "lounge": "layers/chair/cognac-leather/lounge_4k.png",
+                            "living-window": "layers/chair/cognac-leather/living-window_4k.png",
+                            "kitchen-window": "layers/chair/cognac-leather/kitchen-window_4k.png",
                         },
                     },
                 ],
@@ -677,7 +719,7 @@ file and marked `CC-BY` in the source `.blend` file.
 - Retrieved: 2026-08-17
 - Source SHA-256: 0027fcbd73411cce7f49b3d86c22c03d18980e22641083da9d8ba82d9fc94e25
 - License family: Creative Commons Attribution (CC BY)
-- Changes: four high-polygon exterior trees removed; three repositioned
+- Changes: four high-polygon exterior trees removed; five repositioned
   panorama cameras; dedicated orthographic top render; high-sample 4K render
   derivatives; expanded furniture
   proxy geometry; file conversion and compression for web delivery; native-4K
@@ -753,7 +795,7 @@ def main() -> None:
 
     proxy_stats = None
     if args.mode in {"all", "proxy"}:
-        proxy_stats = export_proxy(output)
+        proxy_stats = export_proxy(output, args.property_configurator)
         write_tour_config(output)
         write_attribution(output)
     write_manifest(output, proxy_stats)

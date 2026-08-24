@@ -24,6 +24,8 @@ import bpy
 NODES = {
     "living": (3.40, 5.35, 1.62),
     "lounge": (3.35, 8.75, 1.62),
+    "living-window": (0.981, 6.042, 1.62),
+    "kitchen-window": (0.828, 1.759, 1.62),
 }
 
 TARGETS: dict[str, tuple[str, ...]] = {
@@ -52,6 +54,12 @@ RENDER_BORDERS: dict[tuple[str, str], tuple[float, float, float, float]] = {
     ("rug", "lounge"): (0.00, 1.00, 0.03, 0.38),
     ("chair", "living"): (0.51, 0.68, 0.15, 0.37),
     ("chair", "lounge"): (0.90, 1.00, 0.25, 0.44),
+    ("sofa", "living-window"): (0.52, 0.81, 0.11, 0.44),
+    ("sofa", "kitchen-window"): (0.49, 0.62, 0.35, 0.50),
+    ("rug", "living-window"): (0.52, 0.80, 0.10, 0.43),
+    ("rug", "kitchen-window"): (0.49, 0.64, 0.35, 0.47),
+    ("chair", "living-window"): (0.67, 0.79, 0.29, 0.47),
+    ("chair", "kitchen-window"): (0.55, 0.65, 0.37, 0.49),
 }
 
 

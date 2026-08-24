@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T18:29:56.553Z",
+  "name": "Italian Flat v4 — Property Configurator",
+  "inherits": "../italian-flat-v3",
+  "files": [
+    {
+      "path": "ATTRIBUTION.md",
+      "bytes": 778,
+      "sha256": "c4e631bf9fe04a9d4d006200cf88e565d7e2c8b0f7397da40cea9f25f73d2802"
+    },
+    {
+      "path": "layers/chair/cognac-leather/kitchen-window_4k.png",
+      "bytes": 1482499,
+      "sha256": "9fc0d14d4992462fb94529d7e4ed7341051d64c66a7fed157cf510f61702216e"
+    },
+    {
+      "path": "layers/chair/cognac-leather/living-window_4k.png",
+      "bytes": 1516110,
+      "sha256": "61a95b128dd3b0bcbdc7c080c994fc7041ad30b41f9a7cc136b14809c4555666"
+    },
+    {
+      "path": "layers/chair/moss-velvet/kitchen-window_4k.png",
+      "bytes": 1482073,
+      "sha256": "00b399872eb7d0e60c7bd8e1f9a4f30c6ddda01adc83318673882d81b9fd7ef2"
+    },
+    {
+      "path": "layers/chair/moss-velvet/living-window_4k.png",
+      "bytes": 1517701,
+      "sha256": "e2f5cee78b90d285f7050fcf9eb6199d6a71b96ed6cd79a74db761bc594c4966"
+    },
+    {
+      "path": "layers/floor/light-travertine/kitchen-window_2k.png",
+      "bytes": 1128414,
+      "sha256": "29d619b25ae237380834cb42f82e3f821ef5a1bd655473668d6af19627174d54"
+    },
+    {
+      "path": "layers/floor/light-travertine/kitchen_2k.png",
+      "bytes": 1033804,
+      "sha256": "4a2ed3fa20d027d7d12b494d67f5fc86fbe384144e30e015c1d5a45b1577a377"
+    },
+    {
+      "path": "layers/floor/light-travertine/living-window_2k.png",
+      "bytes": 1346240,
+      "sha256": "867619f0f77d61de0c8e8ac98690e17e98b15c0d122dfa57311fdfb2b8879c90"
+    },
+    {
+      "path": "layers/floor/light-travertine/living_2k.png",
+      "bytes": 1561803,
+      "sha256": "bbdfa6a5c384e2e5312518dcb70b1bb507675bc8efc3c3420a66876778efa564"
+    },
+    {
+      "path": "layers/floor/light-travertine/lounge_2k.png",
+      "bytes": 996803,
+      "sha256": "e6cce33c047e80d2c804c2554478b6f1749f8ca411593ed3e39037aebc609cd6"
+    },
+    {
+      "path": "layers/floor/natural-oak/kitchen-window_2k.png",
+      "bytes": 1238954,
+      "sha256": "3efd3bd810a617c1fa5627cb56ff517c29e0ff6cd36c5fe23592a89dcd41d07d"
+    },
+    {
+      "path": "layers/floor/natural-oak/kitchen_2k.png",
+      "bytes": 1008058,
+      "sha256": "0963d26dae4f2e222bdaf2c15b0610b9af27c9194b156a6c1167855656188ca8"
+    },
+    {
+      "path": "layers/floor/natural-oak/living-window_2k.png",
+      "bytes": 1355705,
+      "sha256": "5a7b8cf591dbe99818c59e1451a9a1c0f3cd877f57b7bd74d610539fdb724b1a"
+    },
+    {
+      "path": "layers/floor/natural-oak/living_2k.png",
+      "bytes": 1543129,
+      "sha256": "e65bd5bdecfea9f67e78a557f1926e9530b4b7d97f3b00665bd8dea901539814"
+    },
+    {
+      "path": "layers/floor/natural-oak/lounge_2k.png",
+      "bytes": 1012026,
+      "sha256": "bfe1f0638dc07b208172694978d545aa45e34813a6296eac2b01caceddacea90"
+    },
+    {
+      "path": "layers/rug/charcoal-geometric/kitchen-window_4k.png",
+      "bytes": 1497736,
+      "sha256": "0e1e1e3bc3d7cdc6a8458fa0581977f0feb94b68b400638752c880808b2683bd"
+    },
+    {
+      "path": "layers/rug/charcoal-geometric/living-window_4k.png",
+      "bytes": 1736987,
+      "sha256": "b0f3111c690f2bab8977e04fa8d6b7be45bdda5ee9f4bd9a670ab485cb6e7f93"
+    },
+    {
+      "path": "layers/rug/sage-weave/kitchen-window_4k.png",
+      "bytes": 1500259,
+      "sha256": "284647afbbb54208c328e63d1492d178485a3507e06ca79888ee6ec6574f0cad"
+    },
+    {
+      "path": "layers/rug/sage-weave/living-window_4k.png",
+      "bytes": 1774723,
+      "sha256": "f381fded24f2dccb4b057605a31c8eafa2d3fab3c7bd7e65ef7d2e7328499326"
+    },
+    {
+      "path": "layers/rug/sand-wool/kitchen-window_4k.png",
+      "bytes": 1502772,
+      "sha256": "82a2d3d1807f8f41af60065adf6246703492da365af90dd2ff8d4a8318b8f896"
+    },
+    {
+      "path": "layers/rug/sand-wool/living-window_4k.png",
+      "bytes": 1809763,
+      "sha256": "fd750599a8b08cf1c104496f8d76225b134ee4a0ad7ad60b0f18dc993ab4bead"
+    },
+    {
+      "path": "layers/sofa/forest-velvet/kitchen-window_4k.png",
+      "bytes": 1514627,
+      "sha256": "41965a39a89570e62c47e6f5ea14389d58bc7db1203b7a0a4f7d570ad4a17b9b"
+    },
+    {
+      "path": "layers/sofa/forest-velvet/living-window_4k.png",
+      "bytes": 1830783,
+      "sha256": "58ac6b981e8ac84ecbf9851b1e0eaa96838825251ec2aa80a6e3dc0d88cb2187"
+    },
+    {
+      "path": "layers/sofa/ivory-boucle/kitchen-window_4k.png",
+      "bytes": 1516122,
+      "sha256": "483aab473692550dfbf3def5fe222cd2245042b95a4d1cd10558f69dd6723e6f"
+    },
+    {
+      "path": "layers/sofa/ivory-boucle/living-window_4k.png",
+      "bytes": 1842733,
+      "sha256": "02467e61d4ca244dc274038abe81e623879f66af845452e38802bc4af964b154"
+    },
+    {
+      "path": "layers/sofa/terracotta/kitchen-window_4k.png",
+      "bytes": 1515241,
+      "sha256": "ab318f46d96518676836eeabeaee76c6345ae2df60614a2a92d5e861335e6ee2"
+    },
+    {
+      "path": "layers/sofa/terracotta/living-window_4k.png",
+      "bytes": 1842454,
+      "sha256": "915ee4872e9969f8a02619a9f1df21a677a3f1b50a20357b511c6489ee4d6cc9"
+    },
+    {
+      "path": "materials/README.md",
+      "bytes": 1045,
+      "sha256": "79a732151b8dfeb39626d8919754cfe547c173ed7a7edac24b0e95ed0022f366"
+    },
+    {
+      "path": "materials/light-travertine-basecolor.png",
+      "bytes": 2798850,
+      "sha256": "6bb35d46ed64ee398a5e2d07075699c60b26b0178360473a2deaeefefc3ebb58"
+    },
+    {
+      "path": "materials/natural-european-oak-basecolor.png",
+      "bytes": 2106121,
+      "sha256": "b7de1fca089945c4624ba13bf95033840de79208aaa160105df9ba2487723194"
+    },
+    {
+      "path": "mesh/property-configurator.glb",
+      "bytes": 272032,
+      "sha256": "6949f1b5255828858d71a591aa980b85852f0f8e3cbfc2c4118193fde85558d0"
+    },
+    {
+      "path": "pano/kitchen-window_1k.jpg",
+      "bytes": 80643,
+      "sha256": "f725ef564335a2d8d074d5d70b45ab93060d332be859fff068409700b8bbe1be"
+    },
+    {
+      "path": "pano/kitchen-window_4k.ktx2",
+      "bytes": 7372442,
+      "sha256": "9937e85c0ecd1b256a05b048c5e999915046c1f29be6d2c99f1f2898e9bbeab9"
+    },
+    {
+      "path": "pano/living-window_1k.jpg",
+      "bytes": 63016,
+      "sha256": "31f23e36cb9ebc8f7f4477f8b8191270b54d82676f3be0efabf34033e4d7f03e"
+    },
+    {
+      "path": "pano/living-window_4k.ktx2",
+      "bytes": 7552665,
+      "sha256": "f92f9a7690bf6e4b874e544ed7d373a6061b5949ba0a388c5d2ea098dbd173c2"
+    },
+    {
+      "path": "tour.json",
+      "bytes": 21405,
+      "sha256": "753c7ff4721dffe05ffe9c138b699cdb951f848ddf32c6be0d522b8bd50e8eb4"
+    }
+  ]
+}

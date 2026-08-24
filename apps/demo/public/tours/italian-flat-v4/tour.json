@@ -1,0 +1,806 @@
+{
+  "version": 1,
+  "name": "Italian Flat v4 — Property Configurator",
+  "units": "meters",
+  "assets": {
+    "basePath": "./tours/italian-flat-v3/",
+    "mesh": {
+      "url": "mesh/v3_covered_windows.glb",
+      "draco": false
+    }
+  },
+  "rendering": {
+    "previewSuffix": "_1k.jpg",
+    "fullSuffix": "_4k.ktx2",
+    "background": "#0b0b0e",
+    "transition": "walk"
+  },
+  "interactables": {
+    "namePrefix": "int_",
+    "highlight": {
+      "color": "#fff4dc",
+      "opacity": 0
+    }
+  },
+  "spatial": {
+    "overview": {
+      "bounds": {
+        "min": [
+          0,
+          -9.899
+        ],
+        "max": [
+          6.98,
+          0
+        ]
+      },
+      "floorY": 0,
+      "ceiling": {
+        "y": 2.7,
+        "thickness": 0.08,
+        "bounds": {
+          "min": [
+            0,
+            -9.899
+          ],
+          "max": [
+            6.98,
+            0
+          ]
+        }
+      },
+      "topView": {
+        "url": "overview/top.jpg",
+        "bounds": {
+          "min": [
+            0,
+            -9.899
+          ],
+          "max": [
+            6.98,
+            0
+          ]
+        }
+      }
+    },
+    "measurementColor": "#ffffff",
+    "measurements": [
+      {
+        "id": "apartment",
+        "label": "Apartment",
+        "bounds": {
+          "min": [
+            0,
+            0,
+            -9.899
+          ],
+          "max": [
+            6.98,
+            2.7,
+            0
+          ]
+        },
+        "axes": [
+          "width",
+          "depth"
+        ],
+        "defaultVisible": true,
+        "color": "#58d3f7",
+        "alwaysOnTop": true,
+        "offset": 0.28
+      },
+      {
+        "id": "sofa",
+        "label": "Sofa",
+        "target": "int_sofa",
+        "axes": [
+          "width",
+          "depth",
+          "height"
+        ]
+      },
+      {
+        "id": "dining-table",
+        "label": "Dining table",
+        "target": "int_dining_table",
+        "axes": [
+          "width",
+          "depth",
+          "height"
+        ]
+      },
+      {
+        "id": "lounge-chair",
+        "label": "Lounge chair",
+        "target": "int_lounge_chair",
+        "axes": [
+          "width",
+          "depth",
+          "height"
+        ]
+      },
+      {
+        "id": "pouf",
+        "label": "Pouf",
+        "target": "int_pouf",
+        "axes": [
+          "width",
+          "depth",
+          "height"
+        ]
+      }
+    ]
+  },
+  "configurables": [
+    {
+      "id": "sofa-finish",
+      "label": "Sofa finish",
+      "interactable": "sofa",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original grey",
+          "swatch": "#57504d"
+        },
+        {
+          "id": "terracotta",
+          "label": "Terracotta",
+          "swatch": "#a85f43",
+          "layers": {
+            "living": "layers/sofa/terracotta/living_4k.png",
+            "lounge": "layers/sofa/terracotta/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/sofa/terracotta/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/sofa/terracotta/kitchen-window_4k.png?v=2"
+          }
+        },
+        {
+          "id": "ivory-boucle",
+          "label": "Ivory bouclé",
+          "swatch": "#e7dcc9",
+          "layers": {
+            "living": "layers/sofa/ivory-boucle/living_4k.png",
+            "lounge": "layers/sofa/ivory-boucle/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/sofa/ivory-boucle/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/sofa/ivory-boucle/kitchen-window_4k.png?v=2"
+          }
+        },
+        {
+          "id": "forest-velvet",
+          "label": "Forest velvet",
+          "swatch": "#315b3b",
+          "layers": {
+            "living": "layers/sofa/forest-velvet/living_4k.png",
+            "lounge": "layers/sofa/forest-velvet/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/sofa/forest-velvet/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/sofa/forest-velvet/kitchen-window_4k.png?v=2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rug-finish",
+      "label": "Rug finish",
+      "interactable": "rug",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original grey",
+          "swatch": "#777370"
+        },
+        {
+          "id": "sand-wool",
+          "label": "Sand wool",
+          "swatch": "#bea47b",
+          "layers": {
+            "living": "layers/rug/sand-wool/living_4k.png",
+            "lounge": "layers/rug/sand-wool/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/rug/sand-wool/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/rug/sand-wool/kitchen-window_4k.png?v=2"
+          }
+        },
+        {
+          "id": "sage-weave",
+          "label": "Sage weave",
+          "swatch": "#789071",
+          "layers": {
+            "living": "layers/rug/sage-weave/living_4k.png",
+            "lounge": "layers/rug/sage-weave/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/rug/sage-weave/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/rug/sage-weave/kitchen-window_4k.png?v=2"
+          }
+        },
+        {
+          "id": "charcoal-geometric",
+          "label": "Charcoal geometric",
+          "swatch": "#41464d",
+          "layers": {
+            "living": "layers/rug/charcoal-geometric/living_4k.png",
+            "lounge": "layers/rug/charcoal-geometric/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/rug/charcoal-geometric/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/rug/charcoal-geometric/kitchen-window_4k.png?v=2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lounge-chair-style",
+      "label": "Lounge chair style",
+      "interactable": "lounge_chair",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Original",
+          "swatch": "#4d4645"
+        },
+        {
+          "id": "moss-velvet",
+          "label": "Moss velvet",
+          "swatch": "#486347",
+          "layers": {
+            "living": "layers/chair/moss-velvet/living_4k.png",
+            "lounge": "layers/chair/moss-velvet/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/chair/moss-velvet/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/chair/moss-velvet/kitchen-window_4k.png?v=2"
+          }
+        },
+        {
+          "id": "cognac-leather",
+          "label": "Cognac leather",
+          "swatch": "#a45f2d",
+          "layers": {
+            "living": "layers/chair/cognac-leather/living_4k.png",
+            "lounge": "layers/chair/cognac-leather/lounge_4k.png",
+            "living-window": "../italian-flat-v4/layers/chair/cognac-leather/living-window_4k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/chair/cognac-leather/kitchen-window_4k.png?v=2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "floor-finish",
+      "label": "Flooring",
+      "interactable": "Floor_Basement_Floor",
+      "default": "original",
+      "variants": [
+        {
+          "id": "original",
+          "label": "Developer standard",
+          "swatch": "#8c8176"
+        },
+        {
+          "id": "natural-oak",
+          "label": "Natural European oak",
+          "swatch": "#c99a61",
+          "layers": {
+            "kitchen": "../italian-flat-v4/layers/floor/natural-oak/kitchen_2k.png?v=2",
+            "living": "../italian-flat-v4/layers/floor/natural-oak/living_2k.png?v=2",
+            "lounge": "../italian-flat-v4/layers/floor/natural-oak/lounge_2k.png?v=2",
+            "living-window": "../italian-flat-v4/layers/floor/natural-oak/living-window_2k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/floor/natural-oak/kitchen-window_2k.png?v=2"
+          }
+        },
+        {
+          "id": "light-travertine",
+          "label": "Honed light travertine",
+          "swatch": "#e5d8bf",
+          "layers": {
+            "kitchen": "../italian-flat-v4/layers/floor/light-travertine/kitchen_2k.png?v=2",
+            "living": "../italian-flat-v4/layers/floor/light-travertine/living_2k.png?v=2",
+            "lounge": "../italian-flat-v4/layers/floor/light-travertine/lounge_2k.png?v=2",
+            "living-window": "../italian-flat-v4/layers/floor/light-travertine/living-window_2k.png?v=2",
+            "kitchen-window": "../italian-flat-v4/layers/floor/light-travertine/kitchen-window_2k.png?v=2"
+          }
+        }
+      ]
+    }
+  ],
+  "guides": [
+    {
+      "id": "property-highlights",
+      "title": "A considered Italian home",
+      "description": "Follow the spatial story, then step away at any point to inspect the apartment for yourself.",
+      "autoplay": {
+        "stepDurationMs": 8000
+      },
+      "cta": {
+        "id": "book-viewing",
+        "label": "Book a private viewing",
+        "href": "#book-viewing"
+      },
+      "steps": [
+        {
+          "id": "connected-layout",
+          "title": "One connected living sequence",
+          "body": "The kitchen, dining room, living area and library read as distinct places while remaining visually connected from end to end.",
+          "view": {
+            "mode": "dollhouse",
+            "node": "living",
+            "position": [
+              14.2,
+              10.2,
+              6.4
+            ],
+            "target": [
+              3.49,
+              0.9,
+              -4.95
+            ],
+            "fov": 45
+          },
+          "measurementsVisible": false
+        },
+        {
+          "id": "flexible-living",
+          "title": "A living room you can make your own",
+          "body": "The central lounge keeps generous circulation around a full sofa group. This chapter previews a lighter bouclé finish without changing the underlying architecture.",
+          "view": {
+            "mode": "panorama",
+            "node": "living",
+            "yaw": -0.295,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false,
+          "variants": {
+            "sofa-finish": "ivory-boucle",
+            "rug-finish": "sage-weave"
+          }
+        },
+        {
+          "id": "kitchen-arrival",
+          "title": "Kitchen and dining share the daylight",
+          "body": "A direct walking transition makes the relationship between preparation, dining and the main living room immediately understandable.",
+          "view": {
+            "mode": "panorama",
+            "node": "kitchen",
+            "yaw": 2.04,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false
+        },
+        {
+          "id": "measured-plan",
+          "title": "Verify the footprint, not just the mood",
+          "body": "The measured top view returns the experience to real dimensions, helping buyers compare furniture, circulation and usable floor area with confidence.",
+          "view": {
+            "mode": "top",
+            "center": [
+              3.49,
+              -4.9495
+            ],
+            "zoom": 1
+          },
+          "measurementsVisible": true
+        },
+        {
+          "id": "library-retreat",
+          "title": "A quieter room at the far end",
+          "body": "The library lounge completes the journey with a more private place to read, work or host a smaller conversation.",
+          "view": {
+            "mode": "panorama",
+            "node": "lounge",
+            "yaw": -2.075,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false,
+          "durationMs": 10000
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "to": "kitchen",
+      "position": [
+        3.688,
+        0,
+        -3.142
+      ],
+      "hideAtTarget": true
+    },
+    {
+      "to": "living",
+      "position": [
+        3.4,
+        0,
+        -5.35
+      ],
+      "hideAtTarget": true
+    },
+    {
+      "to": "lounge",
+      "position": [
+        3.932,
+        0,
+        -9.193
+      ],
+      "hideAtTarget": true
+    },
+    {
+      "to": "living-window",
+      "position": [
+        0.981,
+        0,
+        -6.042
+      ],
+      "hideAtTarget": true
+    },
+    {
+      "to": "kitchen-window",
+      "position": [
+        0.828,
+        0,
+        -1.759
+      ],
+      "hideAtTarget": true
+    }
+  ],
+  "nodes": [
+    {
+      "id": "kitchen",
+      "name": "Kitchen & Dining",
+      "position": [
+        4.1,
+        1.62,
+        -3.2
+      ],
+      "panorama": {
+        "url": "pano/kitchen",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": 2.04,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "living",
+      "name": "Living Room",
+      "position": [
+        3.4,
+        1.62,
+        -5.35
+      ],
+      "panorama": {
+        "url": "pano/living",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": -0.295,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "lounge",
+      "name": "Library Lounge",
+      "position": [
+        3.35,
+        1.62,
+        -8.75
+      ],
+      "panorama": {
+        "url": "pano/lounge",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": -2.075,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "living-window",
+      "name": "Living Window",
+      "position": [
+        0.981,
+        1.62,
+        -6.042
+      ],
+      "panorama": {
+        "url": "../italian-flat-v4/pano/living-window",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": 0,
+        "pitch": -0.03
+      }
+    },
+    {
+      "id": "kitchen-window",
+      "name": "Kitchen Window",
+      "position": [
+        0.828,
+        1.62,
+        -1.759
+      ],
+      "panorama": {
+        "url": "../italian-flat-v4/pano/kitchen-window",
+        "yaw": -1.570796326794898
+      },
+      "initialView": {
+        "yaw": 0,
+        "pitch": -0.03
+      }
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "sofa_materials",
+      "position": [
+        2.45,
+        0.618,
+        -6.872
+      ],
+      "type": "custom",
+      "title": "Sofa finish",
+      "payload": {
+        "configurableId": "sofa-finish"
+      }
+    },
+    {
+      "id": "rug_materials",
+      "position": [
+        3.384,
+        0.003,
+        -7.466
+      ],
+      "type": "custom",
+      "title": "Rug finish",
+      "payload": {
+        "configurableId": "rug-finish"
+      }
+    },
+    {
+      "id": "chair_materials",
+      "position": [
+        4.06,
+        0.37,
+        -6.565
+      ],
+      "type": "custom",
+      "title": "Lounge chair style",
+      "payload": {
+        "configurableId": "lounge-chair-style"
+      }
+    },
+    {
+      "id": "floor_finishes",
+      "node": "living",
+      "position": [
+        3.194,
+        0,
+        -4.406
+      ],
+      "type": "custom",
+      "title": "Flooring",
+      "payload": {
+        "configurationGroup": "flooring"
+      }
+    }
+  ],
+  "start": "living",
+  "configurator": {
+    "catalogVersion": "italian-flat-v4-2026-08",
+    "currency": "EUR",
+    "basePriceMinor": 48500000,
+    "requestLabel": "Request this home",
+    "groups": [
+      {
+        "id": "flooring",
+        "label": "Flooring",
+        "description": "A permanent finish across the connected living level.",
+        "room": "Whole home",
+        "default": "original",
+        "options": [
+          {
+            "id": "original",
+            "label": "Developer standard",
+            "sku": "FLR-STD",
+            "swatch": "#8c8176",
+            "variants": {
+              "floor-finish": "original"
+            }
+          },
+          {
+            "id": "natural-oak",
+            "label": "Natural European oak",
+            "description": "Wide-plank, matte oiled oak.",
+            "sku": "FLR-OAK-NAT",
+            "swatch": "#c99a61",
+            "thumbnail": "./tours/italian-flat-v4/materials/natural-european-oak-basecolor.png",
+            "priceDeltaMinor": 840000,
+            "variants": {
+              "floor-finish": "natural-oak"
+            }
+          },
+          {
+            "id": "light-travertine",
+            "label": "Honed light travertine",
+            "description": "Low-sheen natural stone with filled pores.",
+            "sku": "FLR-TRAV-LT",
+            "swatch": "#e5d8bf",
+            "thumbnail": "./tours/italian-flat-v4/materials/light-travertine-basecolor.png",
+            "priceDeltaMinor": 1120000,
+            "variants": {
+              "floor-finish": "light-travertine"
+            }
+          }
+        ]
+      },
+      {
+        "id": "sofa",
+        "label": "Living room sofa",
+        "room": "Living room",
+        "default": "original",
+        "options": [
+          {
+            "id": "original",
+            "label": "Original grey",
+            "sku": "SOF-STD",
+            "swatch": "#57504d",
+            "variants": {
+              "sofa-finish": "original"
+            }
+          },
+          {
+            "id": "terracotta",
+            "label": "Terracotta",
+            "sku": "SOF-TERRA",
+            "swatch": "#a85f43",
+            "priceDeltaMinor": 220000,
+            "variants": {
+              "sofa-finish": "terracotta"
+            }
+          },
+          {
+            "id": "ivory-boucle",
+            "label": "Ivory bouclé",
+            "sku": "SOF-BOUCLE",
+            "swatch": "#e7dcc9",
+            "priceDeltaMinor": 310000,
+            "variants": {
+              "sofa-finish": "ivory-boucle"
+            }
+          },
+          {
+            "id": "forest-velvet",
+            "label": "Forest velvet",
+            "sku": "SOF-VELVET",
+            "swatch": "#315b3b",
+            "priceDeltaMinor": 280000,
+            "variants": {
+              "sofa-finish": "forest-velvet"
+            },
+            "requires": [
+              {
+                "groupId": "rug",
+                "optionIds": [
+                  "sand-wool",
+                  "sage-weave"
+                ],
+                "message": "Available with the Sand wool or Sage weave rug package."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "rug",
+        "label": "Living room rug",
+        "room": "Living room",
+        "default": "original",
+        "options": [
+          {
+            "id": "original",
+            "label": "Original grey",
+            "sku": "RUG-STD",
+            "swatch": "#777370",
+            "variants": {
+              "rug-finish": "original"
+            }
+          },
+          {
+            "id": "sand-wool",
+            "label": "Sand wool",
+            "sku": "RUG-SAND",
+            "swatch": "#bea47b",
+            "priceDeltaMinor": 95000,
+            "variants": {
+              "rug-finish": "sand-wool"
+            }
+          },
+          {
+            "id": "sage-weave",
+            "label": "Sage weave",
+            "sku": "RUG-SAGE",
+            "swatch": "#789071",
+            "priceDeltaMinor": 105000,
+            "variants": {
+              "rug-finish": "sage-weave"
+            }
+          },
+          {
+            "id": "charcoal-geometric",
+            "label": "Charcoal geometric",
+            "sku": "RUG-CHAR",
+            "swatch": "#41464d",
+            "priceDeltaMinor": 130000,
+            "variants": {
+              "rug-finish": "charcoal-geometric"
+            }
+          }
+        ]
+      },
+      {
+        "id": "chair",
+        "label": "Lounge chair",
+        "room": "Library lounge",
+        "default": "original",
+        "options": [
+          {
+            "id": "original",
+            "label": "Original",
+            "sku": "CHR-STD",
+            "swatch": "#4d4645",
+            "variants": {
+              "lounge-chair-style": "original"
+            }
+          },
+          {
+            "id": "moss-velvet",
+            "label": "Moss velvet",
+            "sku": "CHR-MOSS",
+            "swatch": "#486347",
+            "priceDeltaMinor": 145000,
+            "variants": {
+              "lounge-chair-style": "moss-velvet"
+            }
+          },
+          {
+            "id": "cognac-leather",
+            "label": "Cognac leather",
+            "sku": "CHR-COGNAC",
+            "swatch": "#a45f2d",
+            "priceDeltaMinor": 190000,
+            "variants": {
+              "lounge-chair-style": "cognac-leather"
+            }
+          }
+        ]
+      }
+    ],
+    "presets": [
+      {
+        "id": "developer-standard",
+        "label": "Developer Standard",
+        "description": "The included specification.",
+        "badge": "Included",
+        "selections": {}
+      },
+      {
+        "id": "warm-contemporary",
+        "label": "Warm Contemporary",
+        "description": "Oak and grounded earth tones.",
+        "badge": "Most popular",
+        "selections": {
+          "flooring": "natural-oak",
+          "sofa": "terracotta",
+          "rug": "sand-wool",
+          "chair": "cognac-leather"
+        }
+      },
+      {
+        "id": "natural-light",
+        "label": "Natural Light",
+        "description": "Travertine and tactile pale textiles.",
+        "selections": {
+          "flooring": "light-travertine",
+          "sofa": "ivory-boucle",
+          "rug": "sage-weave",
+          "chair": "moss-velvet"
+        }
+      }
+    ]
+  }
+}
