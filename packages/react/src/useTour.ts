@@ -1,4 +1,10 @@
-import type { EnterVROptions, TourEngine, TourViewMode, TransitionOptions } from "@meshtour/core";
+import type {
+  CustomMeasurementState,
+  EnterVROptions,
+  TourEngine,
+  TourViewMode,
+  TransitionOptions,
+} from "@meshtour/core";
 import { useCallback, useContext } from "react";
 import { TourContext } from "./context";
 
@@ -13,6 +19,7 @@ export interface UseTourResult {
   currentNode: string | null;
   viewMode: TourViewMode;
   measurementsVisible: boolean;
+  customMeasurement: CustomMeasurementState;
   vrSupported: boolean;
   vrActive: boolean;
   goToNode: (nodeId: string, options?: TransitionOptions) => Promise<void>;
@@ -21,6 +28,9 @@ export interface UseTourResult {
   setHotspotsVisible: (visible: boolean) => void;
   setViewMode: (mode: TourViewMode) => void;
   setMeasurementsVisible: (visible: boolean) => void;
+  setCustomMeasurementActive: (active: boolean, options?: { clear?: boolean }) => void;
+  undoCustomMeasurementPoint: () => void;
+  clearCustomMeasurement: () => void;
   enterVR: (options?: EnterVROptions) => Promise<void>;
   exitVR: () => Promise<void>;
 }
@@ -34,6 +44,7 @@ export function useTour(): UseTourResult {
     currentNode,
     viewMode,
     measurementsVisible,
+    customMeasurement,
     vrSupported,
     vrActive,
   } = useContext(TourContext);
@@ -65,6 +76,19 @@ export function useTour(): UseTourResult {
     [engine],
   );
 
+  const setCustomMeasurementActive = useCallback(
+    (active: boolean, options?: { clear?: boolean }) =>
+      engine?.setCustomMeasurementActive(active, options),
+    [engine],
+  );
+
+  const undoCustomMeasurementPoint = useCallback(
+    () => engine?.undoCustomMeasurementPoint(),
+    [engine],
+  );
+
+  const clearCustomMeasurement = useCallback(() => engine?.clearCustomMeasurement(), [engine]);
+
   const enterVR = useCallback(
     async (options?: EnterVROptions) => {
       if (!engine) throw new Error("useTour: engine is not mounted yet");
@@ -84,6 +108,7 @@ export function useTour(): UseTourResult {
     currentNode,
     viewMode,
     measurementsVisible,
+    customMeasurement,
     vrSupported,
     vrActive,
     goToNode,
@@ -92,6 +117,9 @@ export function useTour(): UseTourResult {
     setHotspotsVisible,
     setViewMode,
     setMeasurementsVisible,
+    setCustomMeasurementActive,
+    undoCustomMeasurementPoint,
+    clearCustomMeasurement,
     enterVR,
     exitVR,
   };

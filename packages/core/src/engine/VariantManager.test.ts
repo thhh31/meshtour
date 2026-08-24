@@ -1,6 +1,16 @@
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, ShaderMaterial, Texture } from "three";
+import {
+  BoxGeometry,
+  CubeTexture,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  ShaderMaterial,
+  Texture,
+  Vector3,
+} from "three";
 import { describe, expect, it, vi } from "vitest";
 import { validateConfig } from "../config/loader";
+import { createDollhouseMaterial, type DollhouseSource } from "../rendering/DollhouseMaterial";
 import { PanoramaProjection } from "../rendering/PanoramaMaterial";
 import type { AssetManager } from "./AssetManager";
 import { VariantManager } from "./VariantManager";
@@ -74,6 +84,70 @@ describe("VariantManager", () => {
     expect(
       () => new VariantManager(setup.config, setup.assets, setup.projection, setup.root),
     ).toThrow(/targets missing interactable "sofa"/);
+    setup.projection.dispose();
+    setup.mesh.geometry.dispose();
+  });
+
+  it("binds configurable layers to projection-only proxy targets", () => {
+    const setup = fixture();
+    setup.root.children[0]!.name = "proxy_sofa";
+
+    new VariantManager(setup.config, setup.assets, setup.projection, setup.root);
+
+    expect(setup.mesh.material).toBeInstanceOf(ShaderMaterial);
+    setup.projection.dispose();
+    setup.mesh.geometry.dispose();
+  });
+
+  it("reports whether an atomic update was superseded", async () => {
+    const setup = fixture();
+    let release: (() => void) | undefined;
+    setup.ensureLayer.mockImplementationOnce(
+      () => new Promise<Texture>((resolve) => (release = () => resolve(setup.living))),
+    );
+    const manager = new VariantManager(setup.config, setup.assets, setup.projection, setup.root);
+    await manager.prepareSlot("a", "living");
+
+    const older = manager.setVariants({ "sofa-finish": "terracotta" });
+    const newer = manager.setVariants({ "sofa-finish": "original" });
+    release?.();
+
+    await expect(newer).resolves.toBe(true);
+    await expect(older).resolves.toBe(false);
+    expect(manager.getVariant("sofa-finish")).toBe("original");
+
+    setup.projection.dispose();
+    setup.mesh.geometry.dispose();
+  });
+
+  it("keeps selected layers on configurable meshes in dollhouse view", async () => {
+    const setup = fixture();
+    const manager = new VariantManager(setup.config, setup.assets, setup.projection, setup.root);
+    await manager.prepareSlot("a", "living");
+    await manager.setVariant("sofa-finish", "terracotta");
+
+    const sources: DollhouseSource[] = setup.config.nodes.map((node) => ({
+      nodeId: node.id,
+      texture: new Texture(),
+      depth: new CubeTexture(),
+      center: new Vector3().fromArray(node.position),
+      panorama: node.panorama,
+    }));
+    const base = createDollhouseMaterial(sources, "#000");
+    await manager.prepareDollhouseMaterials(base, sources);
+
+    const material = manager.getDollhouseMaterial(setup.mesh);
+    expect(material?.uniforms.uLayer0!.value).toBe(setup.living);
+    expect(material?.uniforms.uLayer1!.value).toBe(setup.lounge);
+    expect(material?.uniforms.uHasLayer0!.value).toBe(1);
+    expect(material?.uniforms.uPanoramaMix).toBe(base.uniforms.uPanoramaMix);
+
+    await manager.setVariant("sofa-finish", "original");
+    expect(material?.uniforms.uHasLayer0!.value).toBe(0);
+    expect(material?.uniforms.uHasLayer1!.value).toBe(0);
+
+    manager.dispose();
+    base.dispose();
     setup.projection.dispose();
     setup.mesh.geometry.dispose();
   });

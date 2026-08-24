@@ -40,6 +40,7 @@ interface HotspotEntry {
   sprite: Sprite;
   material: SpriteMaterial;
   targetOpacity: number;
+  targetScale: number;
   unregister: () => void;
 }
 
@@ -67,6 +68,9 @@ export class HotspotLayer {
   private config: TourConfig;
   private occlusionClock = 0;
   private cameraWorldPosition = new Vector3();
+  private popupCloseTimer: number | null = null;
+  private closingPopupElement: HTMLElement | null = null;
+  private popupInteractionAbort = new AbortController();
 
   constructor(
     scene: Scene,
@@ -85,8 +89,18 @@ export class HotspotLayer {
     this.defaultPopups = defaultPopups;
     this.config = config;
 
+    this.overlay.parentElement?.addEventListener("pointerdown", this.onContainerPointerDown, {
+      capture: true,
+      signal: this.popupInteractionAbort.signal,
+    });
+
     for (const hotspot of config.hotspots) this.add(hotspot);
   }
+
+  private onContainerPointerDown = (event: PointerEvent): void => {
+    if (!this.popupElement || this.popupElement.contains(event.target as Node)) return;
+    this.closePopup();
+  };
 
   setProxyMeshes(meshes: Mesh[]): void {
     this.proxyMeshes = meshes;
@@ -106,15 +120,23 @@ export class HotspotLayer {
     sprite.renderOrder = 8;
     this.scene.add(sprite);
 
-    const unregister = this.interaction.registerPickable({
+    const entry: HotspotEntry = {
+      hotspot,
+      sprite,
+      material,
+      targetOpacity: 0,
+      targetScale: 0.18,
+      unregister: () => {},
+    };
+    entry.unregister = this.interaction.registerPickable({
       object: sprite,
       onClick: () => this.onHotspotClick(hotspot),
       onHoverChange: (hovered) => {
-        sprite.scale.setScalar(hovered ? 0.22 : 0.18);
+        entry.targetScale = hovered ? 0.23 : 0.18;
       },
     });
 
-    this.entries.push({ hotspot, sprite, material, targetOpacity: 0, unregister });
+    this.entries.push(entry);
   }
 
   /** Author mode moves hotspots live. */
@@ -144,7 +166,7 @@ export class HotspotLayer {
   }
 
   private showPopup(hotspot: HotspotConfig): void {
-    this.closePopup();
+    this.closePopup(true);
     const popup = document.createElement("div");
     popup.className = "meshtour-popup";
     popup.style.cssText = [
@@ -159,7 +181,19 @@ export class HotspotLayer {
       "pointer-events:auto",
       "box-shadow:0 6px 24px rgba(0,0,0,0.4)",
       "z-index:20",
+      "transform-origin:50% 100%",
     ].join(";");
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reducedMotion) {
+      popup.style.opacity = "0";
+      popup.style.scale = "0.94";
+      popup.style.translate = "0 8px";
+      popup.style.filter = "blur(5px)";
+      popup.style.transition =
+        "opacity 240ms ease, scale 320ms cubic-bezier(.22,1,.36,1), translate 320ms cubic-bezier(.22,1,.36,1), filter 240ms ease";
+      popup.style.willChange = "opacity, scale, translate, filter";
+    }
 
     const close = document.createElement("button");
     close.textContent = "×";
@@ -191,22 +225,62 @@ export class HotspotLayer {
     this.overlay.appendChild(popup);
     this.popupElement = popup;
     this.popupAnchor = new Vector3().fromArray(hotspot.position);
+    if (!reducedMotion) {
+      // Commit the first frame before transitioning to the resting state.
+      popup.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        if (this.popupElement !== popup) return;
+        popup.style.opacity = "1";
+        popup.style.scale = "1";
+        popup.style.translate = "0 0";
+        popup.style.filter = "blur(0)";
+      });
+    }
   }
 
-  closePopup(): void {
-    this.popupElement?.remove();
+  closePopup(immediate = false): void {
+    if (immediate && this.closingPopupElement) {
+      this.closingPopupElement.remove();
+      this.closingPopupElement = null;
+      if (this.popupCloseTimer !== null) window.clearTimeout(this.popupCloseTimer);
+      this.popupCloseTimer = null;
+    }
+    const popup = this.popupElement;
+    if (!popup) return;
     this.popupElement = null;
     this.popupAnchor = null;
+    if (this.popupCloseTimer !== null) {
+      window.clearTimeout(this.popupCloseTimer);
+      this.popupCloseTimer = null;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (immediate || reducedMotion) {
+      popup.remove();
+      return;
+    }
+
+    popup.style.pointerEvents = "none";
+    popup.style.opacity = "0";
+    popup.style.scale = "0.94";
+    popup.style.translate = "0 8px";
+    popup.style.filter = "blur(5px)";
+    this.closingPopupElement = popup;
+    this.popupCloseTimer = window.setTimeout(() => {
+      popup.remove();
+      if (this.closingPopupElement === popup) this.closingPopupElement = null;
+      this.popupCloseTimer = null;
+    }, 320);
   }
 
   setVisible(visible: boolean): void {
     this.visible = visible;
-    if (!visible) this.closePopup();
+    if (!visible) this.closePopup(true);
   }
 
   setCurrentNode(nodeId: string): void {
     this.currentNodeId = nodeId;
-    this.closePopup();
+    this.closePopup(true);
   }
 
   /** Project a world position to overlay pixel coordinates. */
@@ -246,6 +320,9 @@ export class HotspotLayer {
       const current = entry.material.opacity;
       const target = entry.targetOpacity;
       entry.material.opacity = clamp(current + (target - current) * Math.min(1, dt * 10), 0, 1);
+      const scaleBlend = 1 - Math.exp(-dt * 16);
+      const scale = entry.sprite.scale.x + (entry.targetScale - entry.sprite.scale.x) * scaleBlend;
+      entry.sprite.scale.setScalar(scale);
       entry.sprite.visible = entry.material.opacity > 0.01;
     }
     this.raycaster.far = Infinity;
@@ -259,7 +336,14 @@ export class HotspotLayer {
   }
 
   dispose(): void {
-    this.closePopup();
+    this.popupInteractionAbort.abort();
+    this.closePopup(true);
+    if (this.popupCloseTimer !== null) {
+      window.clearTimeout(this.popupCloseTimer);
+      this.popupCloseTimer = null;
+    }
+    this.closingPopupElement?.remove();
+    this.closingPopupElement = null;
     for (const entry of this.entries) {
       entry.unregister();
       entry.sprite.removeFromParent();

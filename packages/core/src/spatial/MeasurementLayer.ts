@@ -1,8 +1,19 @@
-import { Box3, Group, Vector3, type Camera, type Object3D, type Scene } from "three";
+import {
+  Box3,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  SphereGeometry,
+  Vector3,
+  type Camera,
+  type Object3D,
+  type Scene,
+} from "three";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import type { MeasurementAxis, MeasurementConfig, TourConfig } from "../config/schema";
+import { calculateCustomMeasurement, type CustomMeasurementState } from "./customMeasurement";
 
 interface LabelEntry {
   element: HTMLDivElement;
@@ -11,6 +22,10 @@ interface LabelEntry {
 
 function formatMeters(value: number): string {
   return `${value.toFixed(value >= 10 ? 1 : 2)} m`;
+}
+
+function formatSquareMeters(value: number): string {
+  return `${value.toFixed(value >= 10 ? 1 : 2)} m²`;
 }
 
 function objectByName(root: Object3D, name: string): Object3D | null {
@@ -31,9 +46,14 @@ export class MeasurementLayer {
   private group = new Group();
   private labels: LabelEntry[] = [];
   private lineMaterials: LineMaterial[] = [];
+  private markerMaterials: MeshBasicMaterial[] = [];
   private measurementConfigs: MeasurementConfig[];
   private selectedId: string | null = null;
+  private customActive = false;
+  private customPoints: Vector3[] = [];
   private visible = false;
+  private opacity = 0;
+  private targetOpacity = 0;
 
   constructor(
     scene: Scene,
@@ -70,13 +90,52 @@ export class MeasurementLayer {
       this.selectedId =
         this.measurementConfigs.find((measurement) => !measurement.defaultVisible)?.id ?? null;
     }
-    this.rebuild();
-    this.group.visible = visible;
-    this.overlay.style.display = visible ? "block" : "none";
+    this.refreshVisibility();
   }
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  setCustomActive(active: boolean): boolean {
+    if (this.customActive === active) return false;
+    this.customActive = active;
+    this.refreshVisibility();
+    return true;
+  }
+
+  isCustomActive(): boolean {
+    return this.customActive;
+  }
+
+  addCustomPoint(point: Vector3, normal: Vector3 | null): void {
+    const placed = point.clone();
+    if (normal) placed.addScaledVector(normal, 0.012);
+    this.customPoints.push(placed);
+    this.refreshVisibility();
+  }
+
+  undoCustomPoint(): boolean {
+    if (this.customPoints.length === 0) return false;
+    this.customPoints.pop();
+    this.refreshVisibility();
+    return true;
+  }
+
+  clearCustomMeasurement(): boolean {
+    if (this.customPoints.length === 0) return false;
+    this.customPoints = [];
+    this.refreshVisibility();
+    return true;
+  }
+
+  getCustomState(): CustomMeasurementState {
+    const points = this.customPoints.map((point) => point.toArray() as [number, number, number]);
+    return {
+      active: this.customActive,
+      points,
+      ...calculateCustomMeasurement(points),
+    };
   }
 
   selectInteractable(interactableId: string): void {
@@ -92,8 +151,19 @@ export class MeasurementLayer {
     if (this.visible) this.rebuild();
   }
 
-  update(): void {
-    if (!this.visible) return;
+  update(dt: number): void {
+    if (Math.abs(this.targetOpacity - this.opacity) > 0.001) {
+      // Frame-rate-independent easing gives the labels and WebGL lines the
+      // same soft response on both high-refresh and throttled displays.
+      const blend = 1 - Math.exp(-dt * 10);
+      this.opacity += (this.targetOpacity - this.opacity) * blend;
+      if (Math.abs(this.targetOpacity - this.opacity) <= 0.01) {
+        this.opacity = this.targetOpacity;
+      }
+      this.applyOpacity();
+      if (!this.visible && this.opacity === 0) this.finishFadeOut();
+    }
+    if (this.targetOpacity === 0 && this.opacity === 0) return;
     const camera = this.camera();
     camera.updateMatrixWorld();
     for (const material of this.lineMaterials) {
@@ -159,16 +229,53 @@ export class MeasurementLayer {
       if (material && !Array.isArray(material)) material.dispose();
     }
     this.lineMaterials = [];
+    this.markerMaterials = [];
     for (const label of this.labels) label.element.remove();
     this.labels = [];
-    if (!this.visible) return;
+    if (!this.shouldRender()) return;
 
-    for (const measurement of this.measurementConfigs) {
-      if (!measurement.defaultVisible && measurement.id !== this.selectedId) continue;
-      const bounds = this.resolveBounds(measurement);
-      if (!bounds) continue;
-      this.addMeasurement(measurement, bounds);
+    if (this.visible && !this.customActive) {
+      for (const measurement of this.measurementConfigs) {
+        if (!measurement.defaultVisible && measurement.id !== this.selectedId) continue;
+        const bounds = this.resolveBounds(measurement);
+        if (!bounds) continue;
+        this.addMeasurement(measurement, bounds);
+      }
     }
+    this.addCustomMeasurement();
+    this.applyOpacity();
+  }
+
+  private shouldRender(): boolean {
+    return this.visible || this.customActive || this.customPoints.length > 0;
+  }
+
+  private refreshVisibility(): void {
+    const shouldRender = this.shouldRender();
+    this.targetOpacity = shouldRender ? 1 : 0;
+    if (shouldRender) {
+      this.rebuild();
+      this.group.visible = true;
+      this.overlay.style.display = "block";
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.opacity = this.targetOpacity;
+      this.applyOpacity();
+      if (!shouldRender) this.finishFadeOut();
+    }
+  }
+
+  private applyOpacity(): void {
+    for (const material of this.lineMaterials) material.opacity = 0.98 * this.opacity;
+    for (const material of this.markerMaterials) material.opacity = this.opacity;
+    this.overlay.style.opacity = String(this.opacity);
+  }
+
+  private finishFadeOut(): void {
+    this.group.visible = false;
+    this.overlay.style.display = "none";
+    this.rebuild();
   }
 
   private addMeasurement(measurement: MeasurementConfig, bounds: Box3): void {
@@ -240,6 +347,89 @@ export class MeasurementLayer {
     this.group.add(outline);
   }
 
+  private addCustomMeasurement(): void {
+    if (this.customPoints.length === 0) return;
+
+    const color = this.config.spatial.measurementColor;
+    for (const point of this.customPoints) {
+      const material = new MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: this.opacity,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.markerMaterials.push(material);
+      const marker = new Mesh(new SphereGeometry(0.035, 16, 12), material);
+      marker.position.copy(point);
+      marker.renderOrder = 102;
+      marker.frustumCulled = false;
+      this.group.add(marker);
+    }
+
+    const linePositions: number[] = [];
+    for (let index = 1; index < this.customPoints.length; index += 1) {
+      const previous = this.customPoints[index - 1]!;
+      const current = this.customPoints[index]!;
+      linePositions.push(...previous.toArray(), ...current.toArray());
+      this.addCustomLabel(
+        formatMeters(previous.distanceTo(current)),
+        [previous.clone().lerp(current, 0.5)],
+        `Measurement segment ${index}: ${formatMeters(previous.distanceTo(current))}`,
+      );
+    }
+
+    const result = calculateCustomMeasurement(this.customPoints);
+    if (result.area !== null) {
+      const first = this.customPoints[0]!;
+      const last = this.customPoints.at(-1)!;
+      linePositions.push(...last.toArray(), ...first.toArray());
+    }
+
+    if (linePositions.length > 0) {
+      const geometry = new LineSegmentsGeometry();
+      geometry.setPositions(linePositions);
+      const material = new LineMaterial({
+        color,
+        linewidth: 4,
+        worldUnits: false,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.98 * this.opacity,
+      });
+      material.resolution.set(this.container.clientWidth, this.container.clientHeight);
+      this.lineMaterials.push(material);
+      const line = new LineSegments2(geometry, material);
+      line.computeLineDistances();
+      line.renderOrder = 101;
+      line.frustumCulled = false;
+      this.group.add(line);
+    }
+
+    if (this.customPoints.length >= 2) {
+      const summary =
+        result.area === null
+          ? `Total ${formatMeters(result.length)}`
+          : `Perimeter ${formatMeters(result.perimeter!)} · Area ${formatSquareMeters(result.area)}`;
+      const centroid = this.customPoints
+        .reduce((sum, point) => sum.add(point), new Vector3())
+        .multiplyScalar(1 / this.customPoints.length);
+      this.addCustomLabel(summary, [centroid], summary);
+    }
+  }
+
+  private addCustomLabel(text: string, positions: Vector3[], ariaLabel: string): void {
+    const element = document.createElement("div");
+    element.className = "meshtour-measurement-label meshtour-custom-measurement-label";
+    element.textContent = text;
+    element.setAttribute("aria-label", ariaLabel);
+    element.style.cssText =
+      "position:absolute;transform:translate(-50%,-50%);white-space:nowrap;padding:7px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(12,13,16,.88);color:#fff;font:700 12px/1.1 system-ui,sans-serif;letter-spacing:-.01em;box-shadow:0 5px 20px rgba(0,0,0,.38);text-shadow:0 1px 1px rgba(0,0,0,.35);backdrop-filter:blur(12px)";
+    this.overlay.appendChild(element);
+    this.labels.push({ element, positions });
+  }
+
   private dimension(
     axis: MeasurementAxis,
     bounds: Box3,
@@ -277,6 +467,8 @@ export class MeasurementLayer {
 
   dispose(): void {
     this.visible = false;
+    this.customActive = false;
+    this.customPoints = [];
     this.rebuild();
     this.group.removeFromParent();
     this.overlay.remove();

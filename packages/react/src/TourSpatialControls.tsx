@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { controlTooltipStyles } from "./controlTooltip";
 import { useTour } from "./useTour";
 
 export interface TourSpatialControlsProps {
@@ -43,6 +44,23 @@ function MeasureIcon() {
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 7v10M20 7v10M4 12h16" stroke="currentColor" strokeWidth="1.8" />
       <path d="m8 9-4 3 4 3M16 9l4 3-4 3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CustomMeasureIcon() {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="m5 18 5-11 9 10"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="5" cy="18" r="2" fill="currentColor" />
+      <circle cx="10" cy="7" r="2" fill="currentColor" />
+      <circle cx="19" cy="17" r="2" fill="currentColor" />
     </svg>
   );
 }
@@ -153,24 +171,37 @@ export function TourSpatialControls({
     currentNode,
     viewMode,
     measurementsVisible,
+    customMeasurement,
     vrSupported,
     vrActive,
     goToNode,
     setViewMode,
     setMeasurementsVisible,
+    setCustomMeasurementActive,
+    undoCustomMeasurementPoint,
+    clearCustomMeasurement,
     enterVR,
     exitVR,
   } = useTour();
   const compact = useCompactLayout();
   const planSurfaceRef = useRef<HTMLDivElement>(null);
   const planCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const planConeRef = useRef<HTMLDivElement>(null);
   const [planSize, setPlanSize] = useState<Size>({ width: 0, height: 0 });
-  const [yaw, setYaw] = useState(0);
   const [fullscreenActive, setFullscreenActive] = useState(false);
   const config = engine?.getConfig();
   const bounds = engine?.getPlanBounds();
   const nodes = config?.nodes ?? [];
   const hasMeasurements = engine?.hasMeasurements() ?? false;
+
+  useEffect(() => {
+    if (!customMeasurement.active) return;
+    const finishOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCustomMeasurementActive(false);
+    };
+    window.addEventListener("keydown", finishOnEscape);
+    return () => window.removeEventListener("keydown", finishOnEscape);
+  }, [customMeasurement.active, setCustomMeasurementActive]);
 
   useEffect(() => {
     const surface = planSurfaceRef.current;
@@ -208,7 +239,9 @@ export function TourSpatialControls({
       const nextYaw = engine.getView().yaw;
       if (!Number.isFinite(lastYaw) || Math.abs(nextYaw - lastYaw) > 0.001) {
         lastYaw = nextYaw;
-        setYaw(nextYaw);
+        if (planConeRef.current) {
+          planConeRef.current.style.transform = `translate(-50%, -100%) rotate(${-nextYaw}rad)`;
+        }
       }
     };
     frame = requestAnimationFrame(tick);
@@ -271,33 +304,38 @@ export function TourSpatialControls({
     activeNode && bounds && planSize.width > 0
       ? planPoint(activeNode.position[0], activeNode.position[2], bounds, planSize)
       : null;
-  const cone = (() => {
-    if (!activePoint) return "";
-    const length = compact ? 24 : 34;
-    const halfWidth = compact ? 12 : 17;
-    const dx = -Math.sin(yaw);
-    const dy = -Math.cos(yaw);
-    const px = -dy;
-    const py = dx;
-    return [
-      `${activePoint.x},${activePoint.y}`,
-      `${activePoint.x + dx * length + px * halfWidth},${activePoint.y + dy * length + py * halfWidth}`,
-      `${activePoint.x + dx * length - px * halfWidth},${activePoint.y + dy * length - py * halfWidth}`,
-    ].join(" ");
-  })();
 
   const planWidth = compact ? 138 : 218;
   const planHeight = compact ? 110 : 166;
   const topLabel = viewMode === "top" ? "Return to panorama" : "Open top view";
   const dollhouseLabel = viewMode === "dollhouse" ? "Return to panorama" : "Open dollhouse view";
   const vrLabel = vrActive ? "Exit VR" : "Enter VR";
+  const customMeasurementLabel = customMeasurement.active
+    ? "Finish custom measurement"
+    : "Start custom measurement";
+  const measurementsLabel = measurementsVisible ? "Hide measurements" : "Show measurements";
+  const measurementSummary =
+    customMeasurement.points.length === 0
+      ? "Click a surface to place the first point"
+      : customMeasurement.points.length === 1
+        ? "Click another surface to measure the distance"
+        : customMeasurement.area === null
+          ? `${customMeasurement.length.toFixed(customMeasurement.length >= 10 ? 1 : 2)} m total`
+          : `${customMeasurement.perimeter!.toFixed(
+              customMeasurement.perimeter! >= 10 ? 1 : 2,
+            )} m perimeter · ${customMeasurement.area.toFixed(
+              customMeasurement.area >= 10 ? 1 : 2,
+            )} m² area`;
 
   return (
     <>
-      <style>{`.meshtour-css-fullscreen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483000!important;background:#08080a!important}`}</style>
+      <style>{`${controlTooltipStyles}
+.meshtour-css-fullscreen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483000!important;background:#08080a!important}
+@keyframes meshtour-measure-tools-in{from{opacity:0;transform:translateY(7px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
       {plan ? (
         <section
           aria-label="Apartment plan"
+          aria-hidden={viewMode === "top"}
           style={{
             position: "absolute",
             zIndex: 42,
@@ -305,7 +343,17 @@ export function TourSpatialControls({
             top: compact ? 10 : 16,
             width: planWidth,
             height: planHeight,
-            pointerEvents: "auto",
+            pointerEvents: viewMode === "top" ? "none" : "auto",
+            opacity: viewMode === "top" ? 0 : 1,
+            transform: `translateY(${viewMode === "top" ? -8 : 0}px) scale(${
+              viewMode === "top" ? 0.96 : 1
+            })`,
+            transformOrigin: "top left",
+            visibility: viewMode === "top" ? "hidden" : "visible",
+            transition:
+              viewMode === "top"
+                ? "opacity 220ms ease, transform 300ms cubic-bezier(.22,1,.36,1), visibility 0s linear 300ms"
+                : "opacity 260ms ease, transform 360ms cubic-bezier(.22,1,.36,1), visibility 0s",
             filter: "drop-shadow(0 3px 7px rgba(0,0,0,.78))",
           }}
         >
@@ -322,26 +370,20 @@ export function TourSpatialControls({
             />
             {bounds && planSize.width > 0 ? (
               <>
-                <svg
-                  width="100%"
-                  height="100%"
-                  viewBox={`0 0 ${planSize.width} ${planSize.height}`}
-                  aria-hidden="true"
-                  style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-                >
-                  {activePoint && viewMode === "panorama" ? (
-                    <polygon points={cone} fill="rgba(88,211,247,.26)" />
-                  ) : null}
-                </svg>
-                {nodes.map((node, index) => {
+                {nodes.map((node) => {
                   const point = planPoint(node.position[0], node.position[2], bounds, planSize);
                   const current = node.id === currentNode;
                   return (
                     <button
                       key={node.id}
                       type="button"
-                      aria-label={`Plan point ${index + 1}`}
-                      title={node.name ?? node.id}
+                      className="meshtour-control-tooltip"
+                      tabIndex={viewMode === "top" ? -1 : 0}
+                      aria-label={`Go to ${node.name ?? node.id}`}
+                      data-tooltip={node.name ?? node.id}
+                      data-tooltip-align={
+                        point.x < 60 ? "start" : point.x > planSize.width - 60 ? "end" : undefined
+                      }
                       onClick={() => {
                         setViewMode("panorama");
                         void goToNode(node.id);
@@ -351,27 +393,175 @@ export function TourSpatialControls({
                         left: point.x,
                         top: point.y,
                         transform: "translate(-50%,-50%)",
-                        width: current ? 16 : 13,
-                        height: current ? 16 : 13,
+                        width: 13,
+                        height: 13,
                         padding: 0,
-                        border: current
-                          ? "2px solid rgba(255,255,255,.9)"
-                          : "2px solid rgba(20,21,24,.76)",
+                        border: "2px solid rgba(20,21,24,.76)",
                         borderRadius: "50%",
-                        background: current ? "#58d3f7" : "rgba(255,255,255,.96)",
+                        background: "rgba(255,255,255,.96)",
                         boxShadow: "0 2px 8px rgba(0,0,0,.52)",
                         cursor: "pointer",
+                        opacity: current ? 0 : 1,
+                        transition: "opacity 180ms ease, transform 180ms ease",
                       }}
                     />
                   );
                 })}
+                {activePoint ? (
+                  <div
+                    className="meshtour-plan-current-location"
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      zIndex: 2,
+                      left: activePoint.x,
+                      top: activePoint.y,
+                      width: 0,
+                      height: 0,
+                      pointerEvents: "none",
+                      opacity: viewMode === "panorama" ? 1 : 0,
+                      transform: `scale(${viewMode === "panorama" ? 1 : 0.72})`,
+                      transition:
+                        "left 680ms cubic-bezier(.22,1,.36,1), top 680ms cubic-bezier(.22,1,.36,1), opacity 260ms ease, transform 360ms cubic-bezier(.22,1,.36,1)",
+                      willChange: "left, top, transform",
+                    }}
+                  >
+                    <div
+                      className="meshtour-plan-view-cone"
+                      ref={planConeRef}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        width: compact ? 24 : 34,
+                        height: compact ? 24 : 34,
+                        transform: "translate(-50%, -100%)",
+                        transformOrigin: "50% 100%",
+                        transition: "transform 90ms linear",
+                        clipPath: "polygon(50% 100%, 0 0, 100% 0)",
+                        background:
+                          "linear-gradient(to top, rgba(88,211,247,.3), rgba(88,211,247,.03))",
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        width: 16,
+                        height: 16,
+                        transform: "translate(-50%, -50%)",
+                        border: "2px solid rgba(255,255,255,.92)",
+                        borderRadius: "50%",
+                        background: "#58d3f7",
+                        boxShadow: "0 2px 9px rgba(0,0,0,.58), 0 0 0 4px rgba(88,211,247,.14)",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>
         </section>
       ) : null}
 
+      {measurements && customMeasurement.active ? (
+        <section
+          aria-label="Custom measurement tools"
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            zIndex: 44,
+            right: compact ? 10 : 16,
+            bottom: compact
+              ? "max(140px, calc(134px + env(safe-area-inset-bottom)))"
+              : "max(70px, calc(64px + env(safe-area-inset-bottom)))",
+            display: "flex",
+            maxWidth: "min(390px, calc(100% - 20px))",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 11px 10px 14px",
+            border: "1px solid rgba(255,255,255,.12)",
+            borderRadius: 13,
+            color: "#fff",
+            background: "rgba(9,10,14,.82)",
+            boxShadow: "0 12px 36px rgba(0,0,0,.4)",
+            backdropFilter: "blur(20px) saturate(130%)",
+            WebkitBackdropFilter: "blur(20px) saturate(130%)",
+            pointerEvents: "auto",
+            animation: "meshtour-measure-tools-in 260ms cubic-bezier(.22,1,.36,1) both",
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <strong style={{ display: "block", fontSize: 11, letterSpacing: ".02em" }}>
+              Custom measurement
+            </strong>
+            <span
+              style={{
+                display: "block",
+                overflow: "hidden",
+                marginTop: 3,
+                color: "rgba(255,255,255,.58)",
+                fontSize: 10,
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {measurementSummary}
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={customMeasurement.points.length === 0}
+            onClick={undoCustomMeasurementPoint}
+            style={{
+              border: 0,
+              color: "rgba(255,255,255,.72)",
+              background: "transparent",
+              font: "600 10px system-ui,sans-serif",
+              cursor: customMeasurement.points.length === 0 ? "not-allowed" : "pointer",
+              opacity: customMeasurement.points.length === 0 ? 0.4 : 1,
+            }}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            disabled={customMeasurement.points.length === 0}
+            onClick={clearCustomMeasurement}
+            style={{
+              border: 0,
+              color: "rgba(255,255,255,.72)",
+              background: "transparent",
+              font: "600 10px system-ui,sans-serif",
+              cursor: customMeasurement.points.length === 0 ? "not-allowed" : "pointer",
+              opacity: customMeasurement.points.length === 0 ? 0.4 : 1,
+            }}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => setCustomMeasurementActive(false)}
+            style={{
+              minHeight: 30,
+              padding: "6px 10px",
+              border: "1px solid rgba(255,255,255,.18)",
+              borderRadius: 8,
+              color: "#111216",
+              background: "#fff",
+              font: "700 10px system-ui,sans-serif",
+              cursor: "pointer",
+            }}
+          >
+            Done
+          </button>
+        </section>
+      ) : null}
+
       <div
+        className="meshtour-spatial-toolbar"
         aria-label="Spatial tools"
         role="toolbar"
         style={{
@@ -390,6 +580,7 @@ export function TourSpatialControls({
         {vr && vrSupported ? (
           <button
             type="button"
+            className="meshtour-control-tooltip"
             onClick={() => {
               const action = vrActive ? exitVR() : enterVR();
               void action.catch((error: unknown) => {
@@ -398,7 +589,7 @@ export function TourSpatialControls({
             }}
             disabled={!ready}
             aria-label={vrLabel}
-            title={vrLabel}
+            data-tooltip={vrLabel}
             aria-pressed={vrActive}
             style={{
               ...iconButton,
@@ -413,10 +604,11 @@ export function TourSpatialControls({
         {dollhouse ? (
           <button
             type="button"
+            className="meshtour-control-tooltip"
             onClick={() => setViewMode(viewMode === "dollhouse" ? "panorama" : "dollhouse")}
             disabled={!ready}
             aria-label={dollhouseLabel}
-            title={dollhouseLabel}
+            data-tooltip={dollhouseLabel}
             aria-pressed={viewMode === "dollhouse"}
             style={{
               ...iconButton,
@@ -430,10 +622,11 @@ export function TourSpatialControls({
         ) : null}
         <button
           type="button"
+          className="meshtour-control-tooltip"
           onClick={() => setViewMode(viewMode === "top" ? "panorama" : "top")}
           disabled={!ready}
           aria-label={topLabel}
-          title={topLabel}
+          data-tooltip={topLabel}
           aria-pressed={viewMode === "top"}
           style={{
             ...iconButton,
@@ -447,8 +640,9 @@ export function TourSpatialControls({
         {measurements && hasMeasurements ? (
           <button
             type="button"
-            aria-label={measurementsVisible ? "Hide measurements" : "Show measurements"}
-            title={measurementsVisible ? "Hide measurements" : "Show measurements"}
+            className="meshtour-control-tooltip"
+            aria-label={measurementsLabel}
+            data-tooltip={measurementsLabel}
             aria-pressed={measurementsVisible}
             disabled={!ready}
             onClick={() => setMeasurementsVisible(!measurementsVisible)}
@@ -462,11 +656,38 @@ export function TourSpatialControls({
             <MeasureIcon />
           </button>
         ) : null}
+        {measurements ? (
+          <button
+            type="button"
+            className="meshtour-control-tooltip"
+            aria-label={customMeasurementLabel}
+            data-tooltip={customMeasurement.active ? undefined : customMeasurementLabel}
+            aria-pressed={customMeasurement.active}
+            disabled={!ready}
+            onClick={() => {
+              if (customMeasurement.active) {
+                setCustomMeasurementActive(false);
+                return;
+              }
+              if (viewMode !== "panorama") setViewMode("panorama");
+              setCustomMeasurementActive(true);
+            }}
+            style={{
+              ...iconButton,
+              color: customMeasurement.active ? "#dff9ff" : iconButton.color,
+              background: customMeasurement.active ? "rgba(25,113,137,.9)" : iconButton.background,
+              cursor: ready ? "pointer" : "wait",
+            }}
+          >
+            <CustomMeasureIcon />
+          </button>
+        ) : null}
         {fullscreen ? (
           <button
             type="button"
+            className="meshtour-control-tooltip"
             aria-label={fullscreenActive ? "Exit fullscreen" : "Enter fullscreen"}
-            title={fullscreenActive ? "Exit fullscreen" : "Enter fullscreen"}
+            data-tooltip={fullscreenActive ? "Exit fullscreen" : "Enter fullscreen"}
             aria-pressed={fullscreenActive}
             disabled={!ready}
             onClick={() => void toggleFullscreen()}

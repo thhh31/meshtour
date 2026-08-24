@@ -8,7 +8,13 @@ import {
   Vector3,
   type Object3D,
 } from "three";
-import type { HotspotConfig, TourConfig } from "../config/schema";
+import type {
+  GuideConfig,
+  GuideStepConfig,
+  GuideViewConfig,
+  HotspotConfig,
+  TourConfig,
+} from "../config/schema";
 import type { LookControls } from "../controls/LookControls";
 import type { HotspotLayer } from "../interaction/HotspotLayer";
 import type { InteractionManager, SceneHit } from "../interaction/InteractionManager";
@@ -35,6 +41,10 @@ export interface AuthorModeContext {
   scene: Scene;
   visibilityRoot: Object3D | null;
   bridgeRoot: Object3D | null;
+  captureGuideView: () => GuideViewConfig;
+  getMeasurementsVisible: () => boolean;
+  getVariantSelections: () => Record<string, string>;
+  previewGuideStep: (guideId: string, stepIndex: number) => Promise<void>;
 }
 
 type ClickMode = "inspect" | "hotspot" | "link";
@@ -86,6 +96,8 @@ export class AuthorMode {
   private dragging: DragTarget | null = null;
   private dragRaycaster = new Raycaster();
   private transitionSlider: HTMLInputElement | null = null;
+  private guideSelect = document.createElement("select");
+  private guideEditor = document.createElement("div");
 
   constructor(ctx: AuthorModeContext) {
     this.ctx = ctx;
@@ -163,6 +175,7 @@ export class AuthorMode {
     this.panel.appendChild(pathRow);
 
     this.buildTransitionDiagnostics();
+    this.buildGuideAuthoring();
 
     // Click mode
     const modeRow = this.el("div", "", "margin-top:8px;display:flex;gap:4px;flex-wrap:wrap");
@@ -239,6 +252,237 @@ export class AuthorMode {
       "margin-top:8px;color:#888",
     );
     this.panel.appendChild(hint);
+  }
+
+  private buildGuideAuthoring(): void {
+    this.panel.appendChild(
+      this.el("div", "Guided stories", "margin-top:12px;font-weight:700;color:#fff"),
+    );
+    const chooser = this.el("div", "", "display:flex;gap:5px;margin-top:5px");
+    this.guideSelect.style.cssText = `${BUTTON_CSS};min-width:0;flex:1`;
+    this.guideSelect.addEventListener("change", () => this.refreshGuideEditor(), {
+      signal: this.abort.signal,
+    });
+    chooser.append(
+      this.guideSelect,
+      this.button("+ Guide", () => {
+        const title = window.prompt("Guide title", "Property highlights")?.trim();
+        if (!title) return;
+        const id = this.uniqueGuideId(this.slug(title) || "guide");
+        this.ctx.config.guides.push({ id, title, steps: [] });
+        this.refreshGuideAuthoring(id);
+      }),
+    );
+    this.panel.appendChild(chooser);
+    this.guideEditor.style.cssText = "margin-top:6px";
+    this.panel.appendChild(this.guideEditor);
+    this.refreshGuideAuthoring();
+  }
+
+  private slug(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  private uniqueGuideId(base: string): string {
+    const ids = new Set(this.ctx.config.guides.map((guide) => guide.id));
+    let id = base;
+    let suffix = 2;
+    while (ids.has(id)) id = `${base}-${suffix++}`;
+    return id;
+  }
+
+  private activeGuide(): GuideConfig | null {
+    return this.ctx.config.guides.find((guide) => guide.id === this.guideSelect.value) ?? null;
+  }
+
+  private refreshGuideAuthoring(selectedId?: string): void {
+    const selection = selectedId ?? this.guideSelect.value ?? this.ctx.config.guides[0]?.id;
+    this.guideSelect.innerHTML = "";
+    for (const guide of this.ctx.config.guides) {
+      const option = document.createElement("option");
+      option.value = guide.id;
+      option.textContent = guide.title;
+      this.guideSelect.appendChild(option);
+    }
+    if (selection && this.ctx.config.guides.some((guide) => guide.id === selection)) {
+      this.guideSelect.value = selection;
+    }
+    this.guideSelect.disabled = this.ctx.config.guides.length === 0;
+    this.refreshGuideEditor();
+  }
+
+  private labeledInput(
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+  ): HTMLElement {
+    const row = this.el("label", "", "display:block;margin-top:5px;color:#aaa");
+    row.appendChild(this.el("span", label));
+    const input = document.createElement("input");
+    input.value = value;
+    input.style.cssText = `${BUTTON_CSS};display:block;width:100%;box-sizing:border-box;margin-top:2px`;
+    input.addEventListener("input", () => onChange(input.value), { signal: this.abort.signal });
+    row.appendChild(input);
+    return row;
+  }
+
+  private refreshGuideEditor(): void {
+    this.guideEditor.innerHTML = "";
+    const guide = this.activeGuide();
+    if (!guide) {
+      this.guideEditor.appendChild(
+        this.el("div", "Create a guide, then capture the current view as a chapter.", "color:#888"),
+      );
+      return;
+    }
+
+    this.guideEditor.appendChild(
+      this.labeledInput("Title", guide.title, (value) => {
+        guide.title = value || guide.title;
+        const option = [...this.guideSelect.options].find((entry) => entry.value === guide.id);
+        if (option) option.textContent = guide.title;
+      }),
+    );
+    this.guideEditor.appendChild(
+      this.labeledInput("Description", guide.description ?? "", (value) => {
+        guide.description = value || undefined;
+      }),
+    );
+
+    const autoplayRow = this.el(
+      "label",
+      "",
+      "display:flex;gap:5px;align-items:center;margin-top:6px;color:#aaa",
+    );
+    const autoplay = document.createElement("input");
+    autoplay.type = "checkbox";
+    autoplay.checked = Boolean(guide.autoplay);
+    const duration = document.createElement("input");
+    duration.type = "number";
+    duration.min = "3000";
+    duration.max = "120000";
+    duration.step = "500";
+    duration.value = String(guide.autoplay?.stepDurationMs ?? 8000);
+    duration.style.cssText = `${BUTTON_CSS};width:72px`;
+    duration.disabled = !autoplay.checked;
+    autoplay.addEventListener(
+      "change",
+      () => {
+        guide.autoplay = autoplay.checked ? { stepDurationMs: Number(duration.value) } : undefined;
+        duration.disabled = !autoplay.checked;
+      },
+      { signal: this.abort.signal },
+    );
+    duration.addEventListener(
+      "change",
+      () => {
+        if (guide.autoplay) guide.autoplay.stepDurationMs = Number(duration.value);
+      },
+      { signal: this.abort.signal },
+    );
+    autoplayRow.append(
+      autoplay,
+      this.el("span", "Autoplay option"),
+      duration,
+      this.el("span", "ms"),
+    );
+    this.guideEditor.appendChild(autoplayRow);
+
+    this.guideEditor.appendChild(
+      this.labeledInput("CTA label", guide.cta?.label ?? "", (value) => {
+        if (!value) guide.cta = undefined;
+        else {
+          guide.cta = {
+            id: guide.cta?.id ?? (this.slug(value) || "cta"),
+            label: value,
+            href: guide.cta?.href,
+          };
+        }
+      }),
+    );
+    this.guideEditor.appendChild(
+      this.labeledInput("CTA URL", guide.cta?.href ?? "", (value) => {
+        if (guide.cta) guide.cta.href = value || undefined;
+      }),
+    );
+
+    const capture = this.button("Capture current chapter", () => {
+      const title = window.prompt("Chapter title", `Chapter ${guide.steps.length + 1}`)?.trim();
+      if (!title) return;
+      const body = window.prompt("Chapter description (optional)", "")?.trim() || undefined;
+      const step: GuideStepConfig = {
+        id: this.uniqueStepId(guide, this.slug(title) || "chapter"),
+        title,
+        body,
+        view: this.ctx.captureGuideView(),
+        measurementsVisible: this.ctx.getMeasurementsVisible(),
+        variants: this.ctx.getVariantSelections(),
+      };
+      guide.steps.push(step);
+      this.refreshGuideEditor();
+    });
+    capture.style.marginTop = "7px";
+    this.guideEditor.appendChild(capture);
+
+    guide.steps.forEach((step, index) => {
+      const row = this.el(
+        "div",
+        "",
+        "margin-top:6px;padding:6px;border:1px solid #333;border-radius:6px",
+      );
+      row.appendChild(this.el("div", `${index + 1}. ${step.title}`, "color:#fff"));
+      const actions = this.el("div", "", "display:flex;gap:3px;flex-wrap:wrap;margin-top:4px");
+      actions.append(
+        this.button("Preview", () => void this.ctx.previewGuideStep(guide.id, index)),
+        this.button("Recapture", () => {
+          step.view = this.ctx.captureGuideView();
+          step.measurementsVisible = this.ctx.getMeasurementsVisible();
+          step.variants = this.ctx.getVariantSelections();
+        }),
+        this.button("Edit", () => {
+          const title = window.prompt("Chapter title", step.title)?.trim();
+          if (title) step.title = title;
+          const body = window.prompt("Chapter description", step.body ?? "")?.trim();
+          step.body = body || undefined;
+          this.refreshGuideEditor();
+        }),
+        this.button("↑", () => this.moveGuideStep(guide, index, index - 1)),
+        this.button("↓", () => this.moveGuideStep(guide, index, index + 1)),
+        this.button("×", () => {
+          if (!window.confirm(`Delete chapter "${step.title}"?`)) return;
+          guide.steps.splice(index, 1);
+          this.refreshGuideEditor();
+        }),
+      );
+      row.appendChild(actions);
+      this.guideEditor.appendChild(row);
+    });
+
+    const remove = this.button("Delete guide", () => {
+      if (!window.confirm(`Delete guide "${guide.title}"?`)) return;
+      this.ctx.config.guides.splice(this.ctx.config.guides.indexOf(guide), 1);
+      this.refreshGuideAuthoring();
+    });
+    remove.style.cssText += ";margin-top:7px;color:#f99";
+    this.guideEditor.appendChild(remove);
+  }
+
+  private uniqueStepId(guide: GuideConfig, base: string): string {
+    const ids = new Set(guide.steps.map((step) => step.id));
+    let id = base;
+    let suffix = 2;
+    while (ids.has(id)) id = `${base}-${suffix++}`;
+    return id;
+  }
+
+  private moveGuideStep(guide: GuideConfig, from: number, to: number): void {
+    if (to < 0 || to >= guide.steps.length) return;
+    const [step] = guide.steps.splice(from, 1);
+    guide.steps.splice(to, 0, step!);
+    this.refreshGuideEditor();
   }
 
   private buildTransitionDiagnostics(): void {

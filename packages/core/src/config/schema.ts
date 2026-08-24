@@ -280,12 +280,134 @@ export type ConfigurableVariantConfig = z.infer<typeof configurableVariantSchema
 export const configurableSchema = z.object({
   id: z.string().min(1),
   label: z.string().optional(),
-  /** Interactable id after removing `interactables.namePrefix` (for example `sofa`). */
+  /** Interactable id, or a projection-only mesh id after removing the `proxy_` prefix. */
   interactable: z.string().min(1),
   default: z.string().min(1),
   variants: z.array(configurableVariantSchema).min(1),
 });
 export type ConfigurableConfig = z.infer<typeof configurableSchema>;
+
+export const configurationDependencySchema = z.object({
+  groupId: z.string().min(1),
+  optionIds: z.array(z.string().min(1)).min(1),
+  message: z.string().min(1).optional(),
+});
+export type ConfigurationDependencyConfig = z.infer<typeof configurationDependencySchema>;
+
+export const configurationOptionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  sku: z.string().min(1).optional(),
+  swatch: z.string().min(1).optional(),
+  thumbnail: z.string().min(1).optional(),
+  priceDeltaMinor: z.number().int().default(0),
+  availability: z.enum(["available", "on-request", "unavailable"]).default("available"),
+  /** Low-level configurable id to visual variant id. */
+  variants: z.record(z.string().min(1)).default({}),
+  requires: z.array(configurationDependencySchema).default([]),
+  excludes: z.array(configurationDependencySchema).default([]),
+  metadata: z.record(z.unknown()).default({}),
+});
+export type ConfigurationOptionConfig = z.infer<typeof configurationOptionSchema>;
+
+export const configurationGroupSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  room: z.string().optional(),
+  default: z.string().min(1),
+  options: z.array(configurationOptionSchema).min(1),
+});
+export type ConfigurationGroupConfig = z.infer<typeof configurationGroupSchema>;
+
+export const configurationPresetSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  badge: z.string().optional(),
+  selections: z.record(z.string().min(1)),
+});
+export type ConfigurationPresetConfig = z.infer<typeof configurationPresetSchema>;
+
+/** Buyer-facing product model layered above the renderer's configurables. */
+export const configuratorSchema = z.object({
+  catalogVersion: z.string().min(1),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  basePriceMinor: z.number().int().nonnegative().default(0),
+  groups: z.array(configurationGroupSchema).min(1),
+  presets: z.array(configurationPresetSchema).default([]),
+  requestLabel: z.string().min(1).default("Request this configuration"),
+});
+export type ConfiguratorConfig = z.infer<typeof configuratorSchema>;
+
+export const panoramaGuideViewSchema = z.object({
+  mode: z.literal("panorama"),
+  node: z.string().min(1),
+  yaw: z.number().finite(),
+  pitch: z
+    .number()
+    .finite()
+    .min(-Math.PI / 2)
+    .max(Math.PI / 2),
+});
+
+export const dollhouseGuideViewSchema = z.object({
+  mode: z.literal("dollhouse"),
+  /** Panorama anchor used for the flight and preferred dollhouse projection. */
+  node: z.string().min(1),
+  position: vec3Schema,
+  target: vec3Schema,
+  fov: z.number().finite().min(20).max(100).default(45),
+});
+
+export const topGuideViewSchema = z.object({
+  mode: z.literal("top"),
+  /** Plan center in world X/Z coordinates. */
+  center: z.tuple([z.number(), z.number()]),
+  zoom: z.number().finite().min(0.65).max(5).default(1),
+});
+
+export const guideViewSchema = z.discriminatedUnion("mode", [
+  panoramaGuideViewSchema,
+  dollhouseGuideViewSchema,
+  topGuideViewSchema,
+]);
+export type GuideViewConfig = z.infer<typeof guideViewSchema>;
+
+export const guideStepSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().optional(),
+  view: guideViewSchema,
+  measurementsVisible: z.boolean().default(false),
+  /** Configurable id to variant id. Omitted configurables retain their current selection. */
+  variants: z.record(z.string().min(1)).default({}),
+  /** Override the guide's autoplay dwell for this step. */
+  durationMs: z.number().int().min(3_000).max(120_000).optional(),
+});
+export type GuideStepConfig = z.infer<typeof guideStepSchema>;
+
+export const guideSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  steps: z.array(guideStepSchema).min(1),
+  /** When present, the UI may offer opt-in autoplay. Playback never starts automatically. */
+  autoplay: z
+    .object({
+      stepDurationMs: z.number().int().min(3_000).max(120_000).default(8_000),
+    })
+    .optional(),
+  cta: z
+    .object({
+      id: z.string().min(1),
+      label: z.string().min(1),
+      href: z.string().min(1).optional(),
+    })
+    .optional(),
+});
+export type GuideConfig = z.infer<typeof guideSchema>;
 
 export const tourConfigSchema = z
   .object({
@@ -297,6 +419,9 @@ export const tourConfigSchema = z
     interactables: interactablesSchema.default({}),
     spatial: spatialSchema.default({}),
     configurables: z.array(configurableSchema).default([]),
+    configurator: configuratorSchema.optional(),
+    /** Optional interactive, authored property stories. */
+    guides: z.array(guideSchema).default([]),
     /** Navigation links visible from every node. */
     links: z.array(linkSchema).default([]),
     nodes: z.array(nodeSchema).min(1),
@@ -420,6 +545,167 @@ export const tourConfigSchema = z
           message: `Default variant "${configurable.default}" does not exist`,
         });
       }
+    });
+
+    if (config.configurator) {
+      const groupIds = new Set<string>();
+      const optionsByGroup = new Map<string, Set<string>>();
+
+      config.configurator.groups.forEach((group, i) => {
+        if (groupIds.has(group.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["configurator", "groups", i, "id"],
+            message: `Duplicate configuration group id "${group.id}"`,
+          });
+        }
+        groupIds.add(group.id);
+
+        const optionIds = new Set<string>();
+        optionsByGroup.set(group.id, optionIds);
+        group.options.forEach((option, j) => {
+          if (optionIds.has(option.id)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["configurator", "groups", i, "options", j, "id"],
+              message: `Duplicate option id "${option.id}" in group "${group.id}"`,
+            });
+          }
+          optionIds.add(option.id);
+
+          for (const [configurableId, variantId] of Object.entries(option.variants)) {
+            const configurable = config.configurables.find((entry) => entry.id === configurableId);
+            if (!configurable) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["configurator", "groups", i, "options", j, "variants", configurableId],
+                message: `Configuration option references unknown configurable "${configurableId}"`,
+              });
+            } else if (!configurable.variants.some((variant) => variant.id === variantId)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["configurator", "groups", i, "options", j, "variants", configurableId],
+                message: `Configuration option variant "${variantId}" does not exist for "${configurableId}"`,
+              });
+            }
+          }
+        });
+
+        if (!optionIds.has(group.default)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["configurator", "groups", i, "default"],
+            message: `Default option "${group.default}" does not exist in group "${group.id}"`,
+          });
+        }
+      });
+
+      config.configurator.groups.forEach((group, i) => {
+        group.options.forEach((option, j) => {
+          for (const [kind, dependencies] of [
+            ["requires", option.requires],
+            ["excludes", option.excludes],
+          ] as const) {
+            dependencies.forEach((dependency, k) => {
+              const knownOptions = optionsByGroup.get(dependency.groupId);
+              if (!knownOptions) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  path: ["configurator", "groups", i, "options", j, kind, k, "groupId"],
+                  message: `Configuration dependency references unknown group "${dependency.groupId}"`,
+                });
+              } else {
+                dependency.optionIds.forEach((optionId, l) => {
+                  if (!knownOptions.has(optionId)) {
+                    ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      path: ["configurator", "groups", i, "options", j, kind, k, "optionIds", l],
+                      message: `Configuration dependency option "${optionId}" does not exist in group "${dependency.groupId}"`,
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+
+      const presetIds = new Set<string>();
+      config.configurator.presets.forEach((preset, i) => {
+        if (presetIds.has(preset.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["configurator", "presets", i, "id"],
+            message: `Duplicate configuration preset id "${preset.id}"`,
+          });
+        }
+        presetIds.add(preset.id);
+        for (const [groupId, optionId] of Object.entries(preset.selections)) {
+          const options = optionsByGroup.get(groupId);
+          if (!options) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["configurator", "presets", i, "selections", groupId],
+              message: `Configuration preset references unknown group "${groupId}"`,
+            });
+          } else if (!options.has(optionId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["configurator", "presets", i, "selections", groupId],
+              message: `Configuration preset option "${optionId}" does not exist in group "${groupId}"`,
+            });
+          }
+        }
+      });
+    }
+
+    const guideIds = new Set<string>();
+    config.guides.forEach((guide, i) => {
+      if (guideIds.has(guide.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["guides", i, "id"],
+          message: `Duplicate guide id "${guide.id}"`,
+        });
+      }
+      guideIds.add(guide.id);
+
+      const stepIds = new Set<string>();
+      guide.steps.forEach((step, j) => {
+        if (stepIds.has(step.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["guides", i, "steps", j, "id"],
+            message: `Duplicate guide step id "${step.id}"`,
+          });
+        }
+        stepIds.add(step.id);
+
+        if (step.view.mode !== "top" && !ids.has(step.view.node)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["guides", i, "steps", j, "view", "node"],
+            message: `Guide step node "${step.view.node}" does not exist`,
+          });
+        }
+
+        for (const [configurableId, variantId] of Object.entries(step.variants)) {
+          const configurable = config.configurables.find((entry) => entry.id === configurableId);
+          if (!configurable) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["guides", i, "steps", j, "variants", configurableId],
+              message: `Guide step configurable "${configurableId}" does not exist`,
+            });
+          } else if (!configurable.variants.some((variant) => variant.id === variantId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["guides", i, "steps", j, "variants", configurableId],
+              message: `Guide step variant "${variantId}" does not exist for "${configurableId}"`,
+            });
+          }
+        }
+      });
     });
 
     const measurementIds = new Set<string>();

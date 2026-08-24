@@ -44,7 +44,101 @@ describe("tour config schema", () => {
     expect(config.nodes[0]!.initialView!.pitch).toBe(0);
     expect(config.nodes[1]!.links).toEqual([]);
     expect(config.links).toEqual([]);
+    expect(config.guides).toEqual([]);
     expect(config.hotspots[0]!.type).toBe("info");
+  });
+
+  it("accepts panorama, dollhouse, and top guided-story chapters", () => {
+    const parsed = validateConfig({
+      ...validConfig(),
+      configurables: [
+        {
+          id: "sofa-finish",
+          interactable: "sofa",
+          default: "original",
+          variants: [{ id: "original" }, { id: "cream" }],
+        },
+      ],
+      guides: [
+        {
+          id: "highlights",
+          title: "Property highlights",
+          autoplay: {},
+          cta: { id: "book", label: "Book a viewing", href: "/contact" },
+          steps: [
+            {
+              id: "living",
+              title: "Open-plan living",
+              view: { mode: "panorama", node: "living_room", yaw: 0.4, pitch: -0.05 },
+              variants: { "sofa-finish": "cream" },
+            },
+            {
+              id: "layout",
+              title: "Connected layout",
+              view: {
+                mode: "dollhouse",
+                node: "living_room",
+                position: [8, 7, 8],
+                target: [0, 1, 0],
+              },
+            },
+            {
+              id: "plan",
+              title: "Measured plan",
+              view: { mode: "top", center: [2, -4] },
+              measurementsVisible: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.guides[0]!.autoplay?.stepDurationMs).toBe(8_000);
+    expect(parsed.guides[0]!.steps[1]!.view).toMatchObject({ mode: "dollhouse", fov: 45 });
+    expect(parsed.guides[0]!.steps[2]!.view).toMatchObject({ mode: "top", zoom: 1 });
+  });
+
+  it("rejects duplicate guide data and invalid guide references", () => {
+    const guide = {
+      id: "highlights",
+      title: "Highlights",
+      steps: [
+        {
+          id: "missing",
+          title: "Missing room",
+          view: { mode: "panorama" as const, node: "garage", yaw: 0, pitch: 0 },
+          variants: { missing: "unknown" },
+        },
+        {
+          id: "missing",
+          title: "Duplicate",
+          view: { mode: "top" as const, center: [0, 0] },
+        },
+      ],
+    };
+
+    expect(() => validateConfig({ ...validConfig(), guides: [guide, guide] })).toThrow(
+      /Guide step node "garage" does not exist|Duplicate guide id|Duplicate guide step id/,
+    );
+    expect(() =>
+      validateConfig({
+        ...validConfig(),
+        guides: [
+          {
+            id: "bad-variant",
+            title: "Bad variant",
+            steps: [
+              {
+                id: "one",
+                title: "One",
+                view: { mode: "top", center: [0, 0] },
+                variants: { missing: "unknown" },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/Guide step configurable "missing" does not exist/);
   });
 
   it("accepts the fade transition for tours with sparse proxy coverage", () => {
@@ -300,6 +394,87 @@ describe("tour config schema", () => {
         ],
       }),
     ).toThrow(/Default variant "missing" does not exist/);
+  });
+
+  it("accepts a buyer configurator and applies schema defaults", () => {
+    const parsed = validateConfig({
+      ...validConfig(),
+      configurables: [
+        {
+          id: "floor-finish",
+          interactable: "floor",
+          default: "original",
+          variants: [{ id: "original" }, { id: "oak" }],
+        },
+      ],
+      configurator: {
+        catalogVersion: "catalog-1",
+        currency: "EUR",
+        groups: [
+          {
+            id: "flooring",
+            label: "Flooring",
+            default: "standard",
+            options: [
+              {
+                id: "standard",
+                label: "Standard",
+                variants: { "floor-finish": "original" },
+              },
+              {
+                id: "oak",
+                label: "Oak",
+                priceDeltaMinor: 840_000,
+                variants: { "floor-finish": "oak" },
+              },
+            ],
+          },
+        ],
+        presets: [{ id: "warm", label: "Warm", selections: { flooring: "oak" } }],
+      },
+    });
+
+    expect(parsed.configurator?.basePriceMinor).toBe(0);
+    expect(parsed.configurator?.requestLabel).toBe("Request this configuration");
+    expect(parsed.configurator?.groups[0]?.options[0]).toMatchObject({
+      availability: "available",
+      priceDeltaMinor: 0,
+    });
+  });
+
+  it("rejects configurator references to unknown variants and dependencies", () => {
+    expect(() =>
+      validateConfig({
+        ...validConfig(),
+        configurables: [
+          {
+            id: "floor-finish",
+            interactable: "floor",
+            default: "original",
+            variants: [{ id: "original" }],
+          },
+        ],
+        configurator: {
+          catalogVersion: "catalog-1",
+          currency: "EUR",
+          groups: [
+            {
+              id: "flooring",
+              label: "Flooring",
+              default: "oak",
+              options: [
+                {
+                  id: "oak",
+                  label: "Oak",
+                  variants: { "floor-finish": "missing" },
+                  requires: [{ groupId: "kitchen", optionIds: ["walnut"] }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow(/does not exist|unknown group/);
   });
 });
 

@@ -64,6 +64,16 @@ export class TopViewControls {
     this.apply();
   }
 
+  getView(): { center: [number, number]; zoom: number } {
+    return { center: [this.center.x, this.center.z], zoom: this.camera.zoom };
+  }
+
+  setView(center: [number, number], zoom: number): void {
+    this.center.set(center[0], this.floorY, center[1]);
+    this.setZoom(zoom);
+    this.applyPosition();
+  }
+
   private currentPinchDistance(): number {
     const [a, b] = [...this.pointers.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;

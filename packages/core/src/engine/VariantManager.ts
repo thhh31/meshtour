@@ -1,5 +1,10 @@
-import { Mesh, type Object3D, type Texture } from "three";
+import { Mesh, type Object3D, type ShaderMaterial, type Texture } from "three";
 import type { ConfigurableConfig, ConfigurableVariantConfig, TourConfig } from "../config/schema";
+import {
+  createDollhouseLayerMaterial,
+  type DollhouseLayerSource,
+  type DollhouseSource,
+} from "../rendering/DollhouseMaterial";
 import {
   type PanoramaLayerMaterial,
   type PanoramaLayerUniforms,
@@ -15,10 +20,20 @@ interface VariantTarget {
   variantId: string;
 }
 
-function resolveInteractableId(object: Object3D, root: Object3D, prefix: string): string | null {
+interface DollhouseContext {
+  baseMaterial: ShaderMaterial;
+  sources: readonly DollhouseSource[];
+}
+
+function resolveConfigurableTargetId(
+  object: Object3D,
+  root: Object3D,
+  prefix: string,
+): string | null {
   let current: Object3D | null = object;
   while (current && current !== root) {
     if (current.name.startsWith(prefix)) return current.name.slice(prefix.length);
+    if (current.name.startsWith("proxy_")) return current.name.slice("proxy_".length);
     current = current.parent;
   }
   return null;
@@ -31,8 +46,12 @@ function resolveInteractableId(object: Object3D, root: Object3D, prefix: string)
 export class VariantManager {
   private assets: AssetManager;
   private targets = new Map<string, VariantTarget>();
+  private meshTargets = new Map<Mesh, VariantTarget>();
+  private dollhouseMaterials = new Map<VariantTarget, ShaderMaterial>();
+  private dollhouseContext: DollhouseContext | null = null;
   private slotANode: string | null = null;
   private slotBNode: string | null = null;
+  private updateGeneration = 0;
 
   constructor(
     config: TourConfig,
@@ -56,11 +75,13 @@ export class VariantManager {
     const found = new Set<string>();
     proxyRoot.traverse((object) => {
       if (!(object as Mesh).isMesh) return;
-      const id = resolveInteractableId(object, proxyRoot, config.interactables.namePrefix);
+      const id = resolveConfigurableTargetId(object, proxyRoot, config.interactables.namePrefix);
       if (!id) return;
       const target = byInteractable.get(id);
       if (!target) return;
-      (object as Mesh).material = target.layer.material;
+      const mesh = object as Mesh;
+      mesh.material = target.layer.material;
+      this.meshTargets.set(mesh, target);
       found.add(target.config.id);
     });
 
@@ -100,6 +121,71 @@ export class VariantManager {
     }
   }
 
+  private async dollhouseLayersFor(
+    target: VariantTarget,
+    variantId = target.variantId,
+  ): Promise<DollhouseLayerSource[]> {
+    const sources = this.dollhouseContext?.sources ?? [];
+    const textures = await Promise.all(
+      sources.map((source) => this.layerFor(target, source.nodeId, variantId)),
+    );
+    textures.forEach((texture) => {
+      if (texture) this.assets.preupload(texture);
+    });
+    return sources.map((source, index) => ({
+      nodeId: source.nodeId,
+      texture: textures[index] ?? null,
+    }));
+  }
+
+  private setDollhouseLayers(material: ShaderMaterial, layers: readonly DollhouseLayerSource[]) {
+    const layersByNode = new Map(layers.map((layer) => [layer.nodeId, layer.texture]));
+    this.dollhouseContext?.sources.forEach((source, index) => {
+      const texture = layersByNode.get(source.nodeId) ?? null;
+      material.uniforms[`uLayer${index}`]!.value = texture;
+      material.uniforms[`uHasLayer${index}`]!.value = texture ? 1 : 0;
+    });
+  }
+
+  /** Build dollhouse projection materials for configurable proxy meshes. */
+  async prepareDollhouseMaterials(
+    baseMaterial: ShaderMaterial,
+    sources: readonly DollhouseSource[],
+  ): Promise<void> {
+    this.disposeDollhouseMaterials();
+    const context: DollhouseContext = { baseMaterial, sources };
+    this.dollhouseContext = context;
+    const prepared = await Promise.all(
+      [...this.targets.values()].map(async (target) => {
+        // A selection may commit while its first set of textures is loading.
+        // Retry until the prepared layers describe the committed selection.
+        while (this.dollhouseContext === context) {
+          const variantId = target.variantId;
+          const layers = await this.dollhouseLayersFor(target, variantId);
+          if (variantId === target.variantId) return { target, layers };
+        }
+        return null;
+      }),
+    );
+    if (this.dollhouseContext !== context) return;
+    for (const entry of prepared) {
+      if (!entry) continue;
+      this.dollhouseMaterials.set(
+        entry.target,
+        createDollhouseLayerMaterial(baseMaterial, sources, entry.layers),
+      );
+    }
+  }
+
+  getDollhouseMaterial(mesh: Mesh): ShaderMaterial | null {
+    const target = this.meshTargets.get(mesh);
+    return target ? (this.dollhouseMaterials.get(target) ?? null) : null;
+  }
+
+  getPanoramaMaterial(mesh: Mesh): ShaderMaterial | null {
+    return this.meshTargets.get(mesh)?.layer.material ?? null;
+  }
+
   /** Load every selected layer before a panorama begins using this slot. */
   async prepareSlot(slot: ProjectionSlot, nodeId: string): Promise<void> {
     const entries = [...this.targets.values()];
@@ -132,26 +218,68 @@ export class VariantManager {
     this.slotBNode = null;
   }
 
-  async setVariant(configurableId: string, variantId: string): Promise<void> {
-    const target = this.targets.get(configurableId);
-    if (!target) throw new Error(`Unknown configurable "${configurableId}"`);
-    this.variant(target, variantId);
-    if (target.variantId === variantId) return;
+  /** Preload and commit a partial selection as one visual transaction. */
+  async setVariants(selections: Record<string, string>): Promise<boolean> {
+    const generation = ++this.updateGeneration;
+    const changes = Object.entries(selections)
+      .map(([configurableId, variantId]) => {
+        const target = this.targets.get(configurableId);
+        if (!target) throw new Error(`Unknown configurable "${configurableId}"`);
+        this.variant(target, variantId);
+        return { target, variantId };
+      })
+      .filter(({ target, variantId }) => target.variantId !== variantId);
+    if (changes.length === 0) return true;
 
-    // Load all active projection slots first, then swap them together.
-    const [textureA, textureB] = await Promise.all([
-      this.slotANode ? this.layerFor(target, this.slotANode, variantId) : null,
-      this.slotBNode ? this.layerFor(target, this.slotBNode, variantId) : null,
-    ]);
-    if (textureA) this.assets.preupload(textureA);
-    if (textureB) this.assets.preupload(textureB);
+    const prepared = await Promise.all(
+      changes.map(async ({ target, variantId }) => {
+        const [textureA, textureB, dollhouseLayers] = await Promise.all([
+          this.slotANode ? this.layerFor(target, this.slotANode, variantId) : null,
+          this.slotBNode ? this.layerFor(target, this.slotBNode, variantId) : null,
+          this.dollhouseContext ? this.dollhouseLayersFor(target, variantId) : [],
+        ]);
+        if (textureA) this.assets.preupload(textureA);
+        if (textureB) this.assets.preupload(textureB);
+        return { target, variantId, textureA, textureB, dollhouseLayers };
+      }),
+    );
 
-    target.variantId = variantId;
-    this.setSlot(target.layer.uniforms, "a", textureA);
-    this.setSlot(target.layer.uniforms, "b", textureB);
+    // A newer user choice owns the commit. Loaded textures remain cached.
+    if (generation !== this.updateGeneration) return false;
+    for (const { target, variantId, textureA, textureB, dollhouseLayers } of prepared) {
+      target.variantId = variantId;
+      this.setSlot(target.layer.uniforms, "a", textureA);
+      this.setSlot(target.layer.uniforms, "b", textureB);
+      const dollhouseMaterial = this.dollhouseMaterials.get(target);
+      if (dollhouseMaterial) this.setDollhouseLayers(dollhouseMaterial, dollhouseLayers);
+    }
+    return true;
+  }
+
+  async setVariant(configurableId: string, variantId: string): Promise<boolean> {
+    return this.setVariants({ [configurableId]: variantId });
   }
 
   getVariant(configurableId: string): string | null {
     return this.targets.get(configurableId)?.variantId ?? null;
+  }
+
+  getVariants(): Record<string, string> {
+    return Object.fromEntries(
+      [...this.targets.entries()].map(([configurableId, target]) => [
+        configurableId,
+        target.variantId,
+      ]),
+    );
+  }
+
+  private disposeDollhouseMaterials(): void {
+    for (const material of this.dollhouseMaterials.values()) material.dispose();
+    this.dollhouseMaterials.clear();
+  }
+
+  dispose(): void {
+    this.dollhouseContext = null;
+    this.disposeDollhouseMaterials();
   }
 }

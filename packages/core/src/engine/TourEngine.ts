@@ -27,7 +27,18 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { AuthorMode } from "../author/AuthorMode";
 import { loadConfig } from "../config/loader";
-import type { TourConfig, TourConfigInput } from "../config/schema";
+import {
+  ConfigurationController,
+  type ConfigurationQuotePayload,
+  type ConfigurationState,
+} from "../configuration/ConfigurationController";
+import type {
+  GuideConfig,
+  GuideStepConfig,
+  GuideViewConfig,
+  TourConfig,
+  TourConfigInput,
+} from "../config/schema";
 import { LookControls } from "../controls/LookControls";
 import { TopViewControls } from "../controls/TopViewControls";
 import { TourEventEmitter, type TourEventMap } from "../events";
@@ -43,6 +54,7 @@ import {
 import { PanoramaProjection } from "../rendering/PanoramaMaterial";
 import { PanoramaVisibilityMap } from "../rendering/PanoramaVisibilityMap";
 import { MeasurementLayer } from "../spatial/MeasurementLayer";
+import type { CustomMeasurementState } from "../spatial/customMeasurement";
 import { smoothstep } from "../utils/math";
 import {
   renderProxyPlan,
@@ -50,6 +62,11 @@ import {
   type PlanRenderOptions,
 } from "../spatial/PlanRenderer";
 import { AssetManager } from "./AssetManager";
+import {
+  GuidedTourController,
+  type GuideState,
+  type GuideStepSource,
+} from "./GuidedTourController";
 import { VariantManager } from "./VariantManager";
 import { resolveXRRigPosition, resolveXRRigYaw } from "./xrMath";
 
@@ -68,6 +85,28 @@ interface ViewTransition {
   endQuaternion: Quaternion;
   startFov: number;
   endFov: number;
+}
+
+interface ViewFadeTransition {
+  from: TourViewMode;
+  to: TourViewMode;
+  elapsed: number;
+  duration: number;
+  swapped: boolean;
+}
+
+interface GuideViewAnimation {
+  elapsed: number;
+  duration: number;
+  startYaw: number;
+  startPitch: number;
+  yawDelta: number;
+  endPitch: number;
+  resolve: () => void;
+}
+
+export function shortestYawDelta(from: number, to: number): number {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
 }
 
 export interface EnterVROptions {
@@ -135,6 +174,7 @@ export class TourEngine {
   private dollhouseCamera = new PerspectiveCamera(45, 1, 0.05, 1000);
   private viewTransitionCamera = new PerspectiveCamera(60, 1, 0.025, 1000);
   private viewTransition: ViewTransition | null = null;
+  private viewFadeTransition: ViewFadeTransition | null = null;
   private viewTransitionWaiters: Array<() => void> = [];
   private projection = new PanoramaProjection();
   private visibility: PanoramaVisibilityMap | null = null;
@@ -147,8 +187,12 @@ export class TourEngine {
   private navigation: NavigationManager | null = null;
   private assets: AssetManager | null = null;
   private variants: VariantManager | null = null;
+  private configuration: ConfigurationController | null = null;
   private authorOverlay: AuthorMode | null = null;
   private measurements: MeasurementLayer | null = null;
+  private guidedTours: GuidedTourController | null = null;
+  private guideViewAnimation: GuideViewAnimation | null = null;
+  private guideInteractionAbort = new AbortController();
   private config: TourConfig | null = null;
   private proxyRoot: Object3D | null = null;
   private visibilityRoot: Object3D | null = null;
@@ -232,6 +276,16 @@ export class TourEngine {
     this.dollhouseControls.screenSpacePanning = false;
     this.dollhouseControls.minPolarAngle = 0.2;
     this.dollhouseControls.maxPolarAngle = Math.PI * 0.48;
+
+    const markGuideExploring = () => this.guidedTours?.markExploring();
+    canvas.addEventListener("pointerdown", markGuideExploring, {
+      signal: this.guideInteractionAbort.signal,
+      capture: true,
+    });
+    canvas.addEventListener("wheel", markGuideExploring, {
+      signal: this.guideInteractionAbort.signal,
+      passive: true,
+    });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.container);
@@ -490,6 +544,15 @@ export class TourEngine {
       if (config.configurables.length > 0) {
         this.variants = new VariantManager(config, this.assets, this.projection, this.proxyRoot);
       }
+      if (config.configurator) {
+        if (!this.variants) throw new Error("A configurator requires visual configurables");
+        this.configuration = new ConfigurationController(config.configurator, {
+          applyVariants: (variants) => this.setVariants(variants),
+          onStateChange: (configuration, source) => {
+            this.events.emit("configurationstatechange", { configuration, source });
+          },
+        });
+      }
       this.visibility = new PanoramaVisibilityMap(
         this.renderer,
         this.visibilityRoot ?? this.proxyRoot,
@@ -563,8 +626,31 @@ export class TourEngine {
         () => this.getActiveCamera(),
         config,
       );
+      this.interaction.onMeasurementClick = (hit) => {
+        if (!this.measurements?.isCustomActive()) return false;
+        this.measurements.addCustomPoint(hit.point, hit.normal);
+        this.events.emit("custommeasurementchange", {
+          measurement: this.measurements.getCustomState(),
+        });
+        return true;
+      };
 
       await this.navigation.setCurrentNode(startNode);
+      this.guidedTours = new GuidedTourController(
+        config.guides,
+        {
+          captureRestoreState: () => ({
+            measurementsVisible: this.areMeasurementsVisible(),
+            variants: this.getVariantSelections(),
+          }),
+          applyStep: (step) => this.applyGuideStep(step),
+          restoreState: async (state) => {
+            await this.setVariants(state.variants);
+            this.setMeasurementsVisible(state.measurementsVisible);
+          },
+        },
+        this.events,
+      );
       this.ensureActive();
       this.events.emit("loadprogress", { progress: 0.95 });
 
@@ -753,7 +839,7 @@ export class TourEngine {
         })
       : Promise.resolve(undefined);
     this.dollhousePreparation = Promise.all([sourcePromise, topViewPromise])
-      .then(([sources, topView]) => {
+      .then(async ([sources, topView]) => {
         if (this.disposed || token !== this.dollhouseLoadToken || !this.config) return;
         this.dollhouseMaterial?.dispose();
         this.dollhouseMaterial = createDollhouseMaterial(
@@ -761,6 +847,13 @@ export class TourEngine {
           this.config.rendering.background,
           topView,
         );
+        await this.variants?.prepareDollhouseMaterials(this.dollhouseMaterial, sources);
+        return { sources };
+      })
+      .then((prepared) => {
+        if (!prepared) return;
+        const { sources } = prepared;
+        if (this.disposed || token !== this.dollhouseLoadToken || !this.dollhouseMaterial) return;
         this.dollhouseSourceIds = sources.map((source) => source.nodeId);
         this.applyDollhouseTextureBlend();
         if (this.viewMode === "dollhouse") {
@@ -1026,6 +1119,30 @@ export class TourEngine {
     return true;
   }
 
+  private updateViewFadeTransition(dt: number): boolean {
+    const transition = this.viewFadeTransition;
+    if (!transition) return false;
+    transition.elapsed += dt;
+    const linear = Math.min(1, transition.elapsed / transition.duration);
+    const midpoint = 0.38;
+    const opacity =
+      linear < midpoint ? smoothstep(0, midpoint, linear) : 1 - smoothstep(midpoint, 1, linear);
+    this.transitionCurtain.style.opacity = String(opacity);
+
+    if (!transition.swapped && linear >= midpoint) {
+      transition.swapped = true;
+      this.applyViewMode(transition.to, true);
+    }
+    if (linear < 1) return true;
+
+    this.viewFadeTransition = null;
+    this.transitionCurtain.style.opacity = "0";
+    this.configureViewInteraction(false);
+    this.events.emit("viewtransitionend", { from: transition.from, to: transition.to });
+    for (const resolve of this.viewTransitionWaiters.splice(0)) resolve();
+    return true;
+  }
+
   private configureViewInteraction(animating: boolean): void {
     const panorama = this.viewMode === "panorama";
     const top = this.viewMode === "top";
@@ -1038,11 +1155,14 @@ export class TourEngine {
     this.interaction?.setProxyPickingEnabled(panorama);
     this.interaction?.setEnabled(interactive);
     this.hotspots?.setVisible(panorama && interactive && this.hotspotsRequestedVisible);
-    this.navigation?.setMarkersVisible(panorama ? interactive : true, !panorama, dollhouse);
+    // Spatial overviews are location-neutral: expose the complete graph,
+    // including a shared link whose destination happens to be the remembered
+    // panorama node.
+    this.navigation?.setMarkersVisible(panorama ? interactive : true, !panorama, !panorama);
   }
 
   private waitForViewTransition(): Promise<void> {
-    if (!this.viewTransition) return Promise.resolve();
+    if (!this.viewTransition && !this.viewFadeTransition) return Promise.resolve();
     return new Promise((resolve) => this.viewTransitionWaiters.push(resolve));
   }
 
@@ -1073,7 +1193,14 @@ export class TourEngine {
   }
 
   private applyDollhouseMaterial(material: Material): void {
-    for (const mesh of this.proxyMeshes) mesh.material = material;
+    for (const mesh of this.proxyMeshes) {
+      // While the multi-source compositor is loading, keep the selected
+      // current-node layer visible instead of flashing the original finish.
+      const configurableMaterial = this.dollhouseMaterial
+        ? this.variants?.getDollhouseMaterial(mesh)
+        : this.variants?.getPanoramaMaterial(mesh);
+      mesh.material = configurableMaterial ?? material;
+    }
     this.disposeCeilingFadeMaterials();
     for (const mesh of this.ceilingMeshes) {
       // Keep the ceiling on the settled panorama projection while it fades.
@@ -1131,6 +1258,23 @@ export class TourEngine {
     this.ceilingFadeMaterials = [];
   }
 
+  private updateGuideViewAnimation(dt: number): boolean {
+    const animation = this.guideViewAnimation;
+    if (!animation) return false;
+    animation.elapsed += dt;
+    const linear = Math.min(1, animation.elapsed / animation.duration);
+    const eased = linear * linear * (3 - 2 * linear);
+    this.controls.setYawPitch(
+      animation.startYaw + animation.yawDelta * eased,
+      animation.startPitch + (animation.endPitch - animation.startPitch) * eased,
+    );
+    if (linear < 1) return true;
+    this.guideViewAnimation = null;
+    this.configureViewInteraction(false);
+    animation.resolve();
+    return true;
+  }
+
   private tick(time: DOMHighResTimeStamp, frame?: XRFrame): void {
     if (frame && this.vrSession) this.calibrateVR(frame);
     const dt = Math.min(0.05, (time - this.lastTime) / 1000);
@@ -1138,6 +1282,8 @@ export class TourEngine {
     this.lastTime = time;
 
     const viewTransitionMoved = this.updateViewTransition(dt);
+    const viewFadeTransitionMoved = this.updateViewFadeTransition(dt);
+    const guideViewMoved = this.updateGuideViewAnimation(dt);
     const viewMoved = this.controls.update(dt);
     if (this.viewMode === "dollhouse" && !this.viewTransition) {
       this.dollhouseControls.update();
@@ -1145,12 +1291,20 @@ export class TourEngine {
     }
     const transitionMoved = this.navigation?.isTransitioning() ?? false;
     this.navigation?.update(dt);
-    if (viewMoved || viewTransitionMoved || transitionMoved) this.interaction?.invalidate();
+    if (
+      viewMoved ||
+      guideViewMoved ||
+      viewTransitionMoved ||
+      viewFadeTransitionMoved ||
+      transitionMoved
+    ) {
+      this.interaction?.invalidate();
+    }
     this.interaction?.update();
     this.updateXRControllerHover();
     this.hotspots?.update(dt);
     this.authorOverlay?.update();
-    this.measurements?.update();
+    this.measurements?.update(dt);
     if (this.skysphere) this.camera.getWorldPosition(this.skysphere.position);
     this.renderer.render(this.scene, this.getActiveCamera());
   }
@@ -1258,6 +1412,7 @@ export class TourEngine {
   }
 
   async goToNode(nodeId: string, options?: TransitionOptions): Promise<void> {
+    this.guidedTours?.markExploring();
     if (!this.navigation) throw new Error("Engine not started");
     if (this.viewMode === "dollhouse") {
       // A dollhouse marker represents the destination itself. Re-anchor the
@@ -1269,7 +1424,10 @@ export class TourEngine {
       await this.waitForViewTransition();
       return;
     }
-    if (this.viewMode !== "panorama") this.setViewMode("panorama");
+    if (this.viewMode !== "panorama") {
+      this.setViewMode("panorama");
+      await this.waitForViewTransition();
+    }
     await this.navigation.goToNode(
       nodeId,
       this.vrSession ? { ...options, instant: options?.instant ?? true } : options,
@@ -1281,6 +1439,7 @@ export class TourEngine {
   }
 
   lookAt(target: [number, number, number] | Vector3): void {
+    this.guidedTours?.markExploring();
     const vec = Array.isArray(target) ? new Vector3().fromArray(target) : target;
     this.controls.lookAt(vec);
     this.interaction?.invalidate();
@@ -1291,8 +1450,159 @@ export class TourEngine {
   }
 
   setView(yaw: number, pitch: number): void {
+    this.guidedTours?.markExploring();
     this.controls.setYawPitch(yaw, pitch);
     this.interaction?.invalidate();
+  }
+
+  captureViewSnapshot(): GuideViewConfig {
+    const node = this.getCurrentNode();
+    if (this.viewMode === "top") {
+      const view = this.topControls.getView();
+      return { mode: "top", center: view.center, zoom: view.zoom };
+    }
+    if (this.viewMode === "dollhouse") {
+      if (!node) throw new Error("Cannot capture a dollhouse guide view without an anchor node");
+      return {
+        mode: "dollhouse",
+        node,
+        position: this.dollhouseCamera.position.toArray(),
+        target: this.dollhouseControls.target.toArray(),
+        fov: this.dollhouseCamera.fov,
+      };
+    }
+    if (!node) throw new Error("Cannot capture a panorama guide view before the tour is ready");
+    return { mode: "panorama", node, yaw: this.controls.yaw, pitch: this.controls.pitch };
+  }
+
+  private animatePanoramaView(yaw: number, pitch: number): Promise<void> {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.controls.setYawPitch(yaw, pitch);
+      this.interaction?.invalidate();
+      return Promise.resolve();
+    }
+    if (this.guideViewAnimation) {
+      this.guideViewAnimation.resolve();
+      this.guideViewAnimation = null;
+    }
+    this.controls.enabled = false;
+    return new Promise((resolve) => {
+      this.guideViewAnimation = {
+        elapsed: 0,
+        duration: 0.65,
+        startYaw: this.controls.yaw,
+        startPitch: this.controls.pitch,
+        yawDelta: shortestYawDelta(this.controls.yaw, yaw),
+        endPitch: pitch,
+        resolve,
+      };
+    });
+  }
+
+  async applyViewSnapshot(view: GuideViewConfig): Promise<void> {
+    if (!this.navigation) throw new Error("Engine not started");
+    if (this.vrSession) throw new Error("Guided desktop views cannot be applied during WebXR");
+
+    if (view.mode === "panorama") {
+      await this.goToNode(view.node);
+      await this.animatePanoramaView(view.yaw, view.pitch);
+      return;
+    }
+
+    if (view.mode === "dollhouse") {
+      if (this.getCurrentNode() !== view.node) await this.goToNode(view.node);
+      if (this.viewMode !== "dollhouse") {
+        this.setViewMode("dollhouse");
+        await this.waitForViewTransition();
+      }
+      this.dollhouseCamera.position.fromArray(view.position);
+      this.dollhouseCamera.fov = view.fov;
+      this.dollhouseCamera.updateProjectionMatrix();
+      this.dollhouseControls.target.fromArray(view.target);
+      this.dollhouseControls.update();
+      this.interaction?.invalidate();
+      return;
+    }
+
+    if (this.viewMode !== "top") {
+      this.setViewMode("top");
+      await this.waitForViewTransition();
+    }
+    this.topControls.setView(view.center, view.zoom);
+    this.interaction?.invalidate();
+  }
+
+  getVariantSelections(): Record<string, string> {
+    const selections: Record<string, string> = {};
+    for (const configurable of this.config?.configurables ?? []) {
+      const variant = this.getVariant(configurable.id);
+      if (variant) selections[configurable.id] = variant;
+    }
+    return selections;
+  }
+
+  private async applyGuideStep(step: GuideStepConfig): Promise<void> {
+    this.setMeasurementsVisible(false);
+    await this.setVariants(step.variants);
+    await this.applyViewSnapshot(step.view);
+    this.setMeasurementsVisible(step.measurementsVisible);
+  }
+
+  getGuides(): readonly GuideConfig[] {
+    return this.guidedTours?.getGuides() ?? this.config?.guides ?? [];
+  }
+
+  getGuideState(): GuideState {
+    return (
+      this.guidedTours?.getState() ?? {
+        guideId: null,
+        stepIndex: -1,
+        status: "idle",
+        autoplay: false,
+        error: null,
+      }
+    );
+  }
+
+  async startGuide(guideId: string, stepIndex = 0): Promise<void> {
+    if (!this.guidedTours) throw new Error("Engine not started");
+    await this.guidedTours.start(guideId, stepIndex);
+  }
+
+  async stopGuide(): Promise<void> {
+    await this.guidedTours?.stop("close");
+  }
+
+  async goToGuideStep(stepIndex: number, source: GuideStepSource = "seek"): Promise<void> {
+    if (!this.guidedTours) throw new Error("Engine not started");
+    await this.guidedTours.goToStep(stepIndex, source);
+  }
+
+  async nextGuideStep(): Promise<void> {
+    if (!this.guidedTours) throw new Error("Engine not started");
+    await this.guidedTours.next();
+  }
+
+  async previousGuideStep(): Promise<void> {
+    if (!this.guidedTours) throw new Error("Engine not started");
+    await this.guidedTours.previous();
+  }
+
+  playGuide(): void {
+    this.guidedTours?.play();
+  }
+
+  pauseGuide(): void {
+    this.guidedTours?.pause("manual");
+  }
+
+  async resumeGuide(): Promise<void> {
+    if (!this.guidedTours) throw new Error("Engine not started");
+    await this.guidedTours.resume();
+  }
+
+  triggerGuideAction(): void {
+    this.guidedTours?.triggerAction();
   }
 
   setHotspotsVisible(visible: boolean): void {
@@ -1305,7 +1615,31 @@ export class TourEngine {
   }
 
   setViewMode(mode: TourViewMode): void {
+    this.guidedTours?.markExploring();
     if (this.vrSession && mode !== "panorama") return;
+    if (mode === this.viewMode || mode === this.viewFadeTransition?.to || !this.proxyRoot) return;
+    if (mode !== "panorama" && this.measurements?.isCustomActive()) {
+      this.setCustomMeasurementActive(false);
+    }
+
+    const topViewChange = mode === "top" || this.viewMode === "top";
+    if (topViewChange && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.viewFadeTransition = {
+        from: this.viewMode,
+        to: mode,
+        elapsed: 0,
+        duration: 0.72,
+        swapped: false,
+      };
+      this.configureViewInteraction(true);
+      this.events.emit("viewtransitionstart", { from: this.viewMode, to: mode });
+      return;
+    }
+
+    this.applyViewMode(mode);
+  }
+
+  private applyViewMode(mode: TourViewMode, holdInteraction = false): void {
     if (mode === this.viewMode || !this.proxyRoot) return;
     const fromCamera = this.getActiveCamera();
     if (this.viewTransition) {
@@ -1395,7 +1729,7 @@ export class TourEngine {
         this.setCeilingOpacity(0);
       }
     }
-    this.configureViewInteraction(animating);
+    this.configureViewInteraction(animating || holdInteraction);
     if (animating) {
       this.events.emit("viewtransitionstart", {
         from: previousMode,
@@ -1462,18 +1796,127 @@ export class TourEngine {
     this.measurements?.selectInteractable(interactableId);
   }
 
+  setCustomMeasurementActive(active: boolean, options: { clear?: boolean } = {}): void {
+    if (!this.measurements) return;
+    let changed = false;
+    if (options.clear) changed = this.measurements.clearCustomMeasurement() || changed;
+    changed = this.measurements.setCustomActive(active) || changed;
+    this.interaction?.setMeasurementMode(active);
+    if (changed) {
+      this.events.emit("custommeasurementchange", {
+        measurement: this.measurements.getCustomState(),
+      });
+    }
+  }
+
+  undoCustomMeasurementPoint(): void {
+    if (!this.measurements?.undoCustomPoint()) return;
+    this.events.emit("custommeasurementchange", {
+      measurement: this.measurements.getCustomState(),
+    });
+  }
+
+  clearCustomMeasurement(): void {
+    if (!this.measurements?.clearCustomMeasurement()) return;
+    this.events.emit("custommeasurementchange", {
+      measurement: this.measurements.getCustomState(),
+    });
+  }
+
+  getCustomMeasurement(): CustomMeasurementState {
+    return (
+      this.measurements?.getCustomState() ?? {
+        active: false,
+        points: [],
+        length: 0,
+        perimeter: null,
+        area: null,
+      }
+    );
+  }
+
   /** Select a transparent per-node appearance layer for a configurable object. */
   async setVariant(configurableId: string, variantId: string): Promise<void> {
+    await this.setVariants({ [configurableId]: variantId });
+  }
+
+  /** Preload and commit several transparent appearance layers atomically. */
+  async setVariants(selections: Record<string, string>): Promise<boolean> {
+    if (Object.keys(selections).length === 0) return true;
     if (!this.variants) throw new Error("Tour has no configurables");
-    const previous = this.variants.getVariant(configurableId);
-    await this.variants.setVariant(configurableId, variantId);
-    if (previous !== variantId) {
-      this.events.emit("variantchange", { configurableId, variantId });
+    const previous = this.variants.getVariants();
+    const applied = await this.variants.setVariants(selections);
+    if (!applied) return false;
+    const current = this.variants.getVariants();
+    const changed: Record<string, string> = {};
+    for (const [configurableId, variantId] of Object.entries(current)) {
+      if (previous[configurableId] !== variantId) {
+        changed[configurableId] = variantId;
+        this.events.emit("variantchange", { configurableId, variantId });
+      }
     }
+    if (Object.keys(changed).length > 0) this.events.emit("variantschange", { variants: changed });
+    if (this.viewMode === "dollhouse") this.interaction?.invalidate();
+    return true;
   }
 
   getVariant(configurableId: string): string | null {
     return this.variants?.getVariant(configurableId) ?? null;
+  }
+
+  getConfigurationState(): ConfigurationState | null {
+    return this.configuration?.getState() ?? null;
+  }
+
+  getConfiguratorConfig() {
+    return this.configuration?.getConfig() ?? null;
+  }
+
+  getConfigurationOptionAvailability(groupId: string, optionId: string) {
+    if (!this.configuration)
+      return { available: false, reason: "Tour has no product configurator" };
+    return this.configuration.getOptionAvailability(groupId, optionId);
+  }
+
+  selectConfigurationOption(groupId: string, optionId: string): Promise<ConfigurationState> {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.select(groupId, optionId);
+  }
+
+  applyConfigurationPreset(presetId: string): Promise<ConfigurationState> {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.applyPreset(presetId);
+  }
+
+  restoreConfiguration(selections: Record<string, string>): Promise<ConfigurationState> {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.restore(selections);
+  }
+
+  restoreSerializedConfiguration(value: string): Promise<ConfigurationState> {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.restoreSerialized(value);
+  }
+
+  resetConfiguration(compare = false): Promise<ConfigurationState> {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.reset(compare ? "compare" : "reset");
+  }
+
+  serializeConfiguration(): string {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.serialize();
+  }
+
+  getConfigurationQuotePayload(): ConfigurationQuotePayload {
+    if (!this.configuration) throw new Error("Tour has no product configurator");
+    return this.configuration.getQuotePayload();
+  }
+
+  requestConfiguration(): ConfigurationQuotePayload {
+    const payload = this.getConfigurationQuotePayload();
+    this.events.emit("configurationrequest", { payload });
+    return payload;
   }
 
   /** Project a world position to container pixel coordinates (for custom HTML UIs). */
@@ -1513,6 +1956,10 @@ export class TourEngine {
         scene: this.scene,
         visibilityRoot: this.visibilityRoot ?? this.proxyRoot,
         bridgeRoot: this.bridgeRoot,
+        captureGuideView: () => this.captureViewSnapshot(),
+        getMeasurementsVisible: () => this.areMeasurementsVisible(),
+        getVariantSelections: () => this.getVariantSelections(),
+        previewGuideStep: (guideId, stepIndex) => this.startGuide(guideId, stepIndex),
       });
     } else if (!enabled && this.authorOverlay) {
       this.authorOverlay.dispose();
@@ -1530,6 +1977,8 @@ export class TourEngine {
     this.topViewLoadToken += 1;
     this.dollhouseLoadToken += 1;
     this.viewTransition = null;
+    if (this.guideViewAnimation) this.guideViewAnimation.resolve();
+    this.guideViewAnimation = null;
     for (const resolve of this.viewTransitionWaiters.splice(0)) resolve();
     cancelAnimationFrame(this.animationFrame);
     this.renderer.setAnimationLoop(null);
@@ -1539,6 +1988,8 @@ export class TourEngine {
       this.vrSession = null;
     }
     this.resizeObserver.disconnect();
+    this.guideInteractionAbort.abort();
+    this.guidedTours?.dispose();
     this.authorOverlay?.dispose();
     this.measurements?.dispose();
     this.hotspots?.dispose();
@@ -1551,6 +2002,7 @@ export class TourEngine {
     this.controls.dispose();
     this.topControls.dispose();
     this.dollhouseControls.dispose();
+    this.variants?.dispose();
     this.projection.dispose();
     this.dollhouseMaterial?.dispose();
     this.topViewMesh?.geometry.dispose();

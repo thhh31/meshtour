@@ -12,8 +12,12 @@ import {
 import type { PanoramaConfig, PlanBoundsConfig } from "../config/schema";
 import { PANORAMA_DEPTH_FAR, PANORAMA_DEPTH_NEAR } from "./PanoramaVisibilityMap";
 
-/** The live compositor stays within conservative mobile fragment-texture limits. */
-export const MAX_DOLLHOUSE_SOURCES = 4;
+/**
+ * WebGL2 guarantees 16 fragment texture units. Five configurable sources use
+ * 15 (panorama, depth and layer each), preserving the final unit for a top
+ * view while keeping every capture in the five-node demo.
+ */
+export const MAX_DOLLHOUSE_SOURCES = 5;
 
 export interface DollhouseSource {
   nodeId: string;
@@ -29,6 +33,11 @@ export interface DollhouseTopView {
   bounds: PlanBoundsConfig;
 }
 
+export interface DollhouseLayerSource {
+  nodeId: string;
+  texture: Texture | null;
+}
+
 const vertexShader = /* glsl */ `
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
@@ -41,7 +50,7 @@ void main() {
 }
 `;
 
-function sourceDeclarations(count: number): string {
+function sourceDeclarations(count: number, hasLayers: boolean): string {
   return Array.from(
     { length: count },
     (_, index) => /* glsl */ `
@@ -51,15 +60,32 @@ uniform vec3 uCenter${index};
 uniform float uYaw${index};
 uniform float uExposure${index};
 uniform vec3 uColor${index};
-uniform float uPreferred${index};`,
+uniform float uPreferred${index};${
+      hasLayers
+        ? `
+uniform sampler2D uLayer${index};
+uniform float uHasLayer${index};`
+        : ""
+    }`,
   ).join("\n");
 }
 
-function sourceContributions(count: number): string {
+function sourceContributions(count: number, hasLayers: boolean): string {
   return Array.from(
     { length: count },
     (_, index) => /* glsl */ `
   vec4 sourceColor${index} = samplePano(uPano${index}, uCenter${index}, uYaw${index});
+${
+  hasLayers
+    ? `  if (uHasLayer${index} > 0.5) {
+    vec4 layerColor${index} = samplePano(uLayer${index}, uCenter${index}, uYaw${index});
+    sourceColor${index} = vec4(
+      sourceColor${index}.rgb * (1.0 - layerColor${index}.a) + layerColor${index}.rgb,
+      1.0
+    );
+  }`
+    : ""
+}
   sourceColor${index}.rgb *= exp2(uExposure${index}) * uColor${index};
   float sourceWeight${index} = sourceWeight(uDepth${index}, uCenter${index});
   colorSum += sourceColor${index}.rgb * sourceWeight${index};
@@ -101,9 +127,9 @@ function topViewContribution(enabled: boolean): string {
   }`;
 }
 
-function createFragmentShader(count: number, hasTopView: boolean): string {
+function createFragmentShader(count: number, hasTopView: boolean, hasLayers = false): string {
   return /* glsl */ `
-${sourceDeclarations(count)}
+${sourceDeclarations(count, hasLayers)}
 ${topViewDeclarations(hasTopView)}
 uniform vec3 uBackground;
 uniform float uDepthNear;
@@ -158,9 +184,20 @@ float sourceWeight(samplerCube depthMap, vec3 center) {
     storedDistance + tolerance,
     fragmentDistance
   );
-  float facing = abs(dot(normalize(vWorldNormal), -direction));
+  vec3 surfaceNormal = normalize(vWorldNormal);
+  float sourceFacing = dot(surfaceNormal, -direction);
+  float viewerFacing = dot(
+    surfaceNormal,
+    normalize(cameraPosition - vWorldPosition)
+  );
+  // A zero-thickness proxy wall is visible from both rooms. Only a panorama
+  // captured on the camera-facing side may texture the rendered face; using
+  // abs(sourceFacing) alone lets the opposite room ghost through the wall.
+  float sameSide = smoothstep(0.0, 0.04, sourceFacing * viewerFacing);
+  float facing = abs(sourceFacing);
   float distanceQuality = 1.0 / (1.0 + fragmentDistance * fragmentDistance * 0.035);
-  float quality = visibility * (0.2 + 0.8 * facing * facing) * distanceQuality;
+  float quality =
+    visibility * sameSide * (0.2 + 0.8 * facing * facing) * distanceQuality;
   // Prefer a single strong source while retaining a narrow, soft seam where
   // two captures have near-identical coverage.
   return pow(max(quality, 0.0), 5.0);
@@ -171,7 +208,7 @@ void main() {
   float weightSum = 0.0;
   vec3 preferredColorSum = vec3(0.0);
   float preferredWeightSum = 0.0;
-${sourceContributions(count)}
+${sourceContributions(count, hasLayers)}
 ${topViewContribution(hasTopView)}
   if (weightSum <= 0.000001) discard;
   vec3 compositeColor = colorSum / weightSum;
@@ -182,6 +219,27 @@ ${topViewContribution(hasTopView)}
   fragColor = linearToOutputTexel(vec4(color.rgb, color.a * uOpacity));
 }
 `;
+}
+
+function createMaterial(
+  name: string,
+  uniforms: Record<string, IUniform>,
+  sourceCount: number,
+  hasTopView: boolean,
+  hasLayers = false,
+): ShaderMaterial {
+  const material = new ShaderMaterial({
+    name,
+    uniforms,
+    vertexShader,
+    fragmentShader: createFragmentShader(sourceCount, hasTopView, hasLayers),
+    side: DoubleSide,
+    depthTest: true,
+    depthWrite: true,
+    glslVersion: GLSL3,
+  });
+  material.toneMapped = false;
+  return material;
 }
 
 /** Build a stable multi-panorama material for the external dollhouse camera. */
@@ -227,16 +285,41 @@ export function createDollhouseMaterial(
     };
   }
 
-  const material = new ShaderMaterial({
-    name: `meshtour_dollhouse_projection_${sources.length}`,
+  return createMaterial(
+    `meshtour_dollhouse_projection_${sources.length}`,
     uniforms,
-    vertexShader,
-    fragmentShader: createFragmentShader(sources.length, Boolean(topView)),
-    side: DoubleSide,
-    depthTest: true,
-    depthWrite: true,
-    glslVersion: GLSL3,
+    sources.length,
+    Boolean(topView),
+  );
+}
+
+/**
+ * Add private configurable-layer slots to a dollhouse material while sharing
+ * all base projection uniforms. Camera-flight blending and preferred-source
+ * changes therefore stay synchronized across the whole proxy.
+ */
+export function createDollhouseLayerMaterial(
+  baseMaterial: ShaderMaterial,
+  sources: readonly DollhouseSource[],
+  layers: readonly DollhouseLayerSource[],
+): ShaderMaterial {
+  if (sources.length === 0 || sources.length > MAX_DOLLHOUSE_SOURCES) {
+    throw new Error(
+      `Dollhouse projection needs 1-${MAX_DOLLHOUSE_SOURCES} panorama sources; received ${sources.length}`,
+    );
+  }
+  const layersByNode = new Map(layers.map((layer) => [layer.nodeId, layer.texture]));
+  const uniforms: Record<string, IUniform> = { ...baseMaterial.uniforms };
+  sources.forEach((source, index) => {
+    const texture = layersByNode.get(source.nodeId) ?? null;
+    uniforms[`uLayer${index}`] = { value: texture };
+    uniforms[`uHasLayer${index}`] = { value: texture ? 1 : 0 };
   });
-  material.toneMapped = false;
-  return material;
+  return createMaterial(
+    `${baseMaterial.name}_layer`,
+    uniforms,
+    sources.length,
+    Boolean(baseMaterial.uniforms.uTopView),
+    true,
+  );
 }

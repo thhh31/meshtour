@@ -67,6 +67,8 @@ type BvhGeometry = BufferGeometry & {
 export class InteractionManager {
   /** Author mode taps into raw scene clicks for hotspot/link placement. */
   onSceneClick: ((hit: SceneHit) => void) | null = null;
+  /** Custom measurement mode consumes proxy-surface clicks before markers. */
+  onMeasurementClick: ((hit: SceneHit) => boolean) | null = null;
 
   private camera: Camera;
   private element: HTMLElement;
@@ -88,6 +90,7 @@ export class InteractionManager {
   private abort = new AbortController();
   private enabled = true;
   private proxyPickingEnabled = true;
+  private measurementMode = false;
 
   constructor(
     camera: Camera,
@@ -177,6 +180,15 @@ export class InteractionManager {
     }
   }
 
+  setMeasurementMode(active: boolean): void {
+    if (this.measurementMode === active) return;
+    this.measurementMode = active;
+    this.setHoveredPickable(null);
+    this.setHoveredInteractable(null);
+    this.invalidate();
+    if (!active) this.element.style.cursor = "";
+  }
+
   /** Switch picking to the camera used by the active view mode. */
   setCamera(camera: Camera): void {
     if (camera === this.camera) return;
@@ -242,6 +254,9 @@ export class InteractionManager {
   private selectWithCurrentRay(): boolean {
     const pickableHit = this.raycastPickables();
     const proxyHit = this.raycastProxy();
+    if (this.measurementMode && proxyHit && this.onMeasurementClick?.(this.toSceneHit(proxyHit))) {
+      return true;
+    }
     if (
       pickableHit &&
       isPickableInFront(pickableHit.intersection.distance, proxyHit?.distance ?? null)
@@ -314,6 +329,14 @@ export class InteractionManager {
   private updateHoverWithCurrentRay(updateCursor: boolean): void {
     const pickableHit = this.raycastPickables();
     const proxyHit = this.raycastProxy();
+    if (this.measurementMode) {
+      this.setHoveredPickable(null);
+      this.setHoveredInteractable(null);
+      if (proxyHit) this.updateReticle(this.toSceneHit(proxyHit));
+      else this.reticle.visible = false;
+      if (updateCursor) this.element.style.cursor = "crosshair";
+      return;
+    }
     const pickableInFront =
       pickableHit &&
       isPickableInFront(pickableHit.intersection.distance, proxyHit?.distance ?? null);
