@@ -5,8 +5,8 @@
   "assets": {
     "basePath": "./tours/italian-flat-v3/",
     "mesh": {
-      "url": "mesh/v3_covered_windows.glb",
-      "draco": false
+      "url": "../italian-flat-v4/mesh/property-configurator-covered.glb",
+      "draco": true
     }
   },
   "rendering": {
@@ -262,7 +262,7 @@
     {
       "id": "floor-finish",
       "label": "Flooring",
-      "interactable": "Floor_Basement_Floor",
+      "interactable": "floor",
       "default": "original",
       "variants": [
         {

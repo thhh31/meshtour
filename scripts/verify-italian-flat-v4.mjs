@@ -40,6 +40,10 @@ for (const entry of manifest.files) {
 assert(config.configurator?.groups.length === 4, "v4 must expose four buyer option groups");
 assert(config.configurator?.presets.length === 3, "v4 must expose three curated packages");
 assert(config.configurables.length === 4, "v4 must retain furniture and add flooring finishes");
+assert(
+  config.configurables.find((entry) => entry.id === "floor-finish")?.interactable === "floor",
+  "v4 flooring must target the int_floor mesh",
+);
 assert(config.guides.length > 0, "v4 must retain the guided property tour");
 assert(config.nodes.length === 5, "v4 must expose all five panorama viewpoints");
 assert(
@@ -55,10 +59,10 @@ assert(
   "v4 must not expose the kitchen finishes hotspot",
 );
 assert(
-  config.assets.mesh?.url === "mesh/v3_covered_windows.glb",
-  "v4 must reuse the stable v3 covered-windows mesh",
+  config.assets.mesh?.url === "../italian-flat-v4/mesh/property-configurator-covered.glb",
+  "v4 must use its cabinetry-safe property configurator mesh",
 );
-assert(config.assets.mesh?.draco === false, "the restored v3 mesh is not Draco-compressed");
+assert(config.assets.mesh?.draco === true, "the v4 property configurator mesh must use Draco");
 
 for (const expected of [
   { id: "living-window", position: [0.981, 1.62, -6.042] },
@@ -123,13 +127,45 @@ const proxyJson = JSON.parse(
     .toString("utf8")
     .trimEnd(),
 );
-assert(proxyJson.meshes.length > 0, "the restored v3 proxy contains no meshes");
+assert(proxyJson.meshes.length > 0, "the v4 proxy contains no meshes");
 const proxyNodeNames = new Set(proxyJson.nodes.map((node) => node.name));
+for (const coverName of [
+  "Cube",
+  "Cube.001",
+  "Cube.002",
+  "proxy_Door.009",
+  "proxy_Door.010",
+  "proxy_Door.011",
+]) {
+  assert(proxyNodeNames.has(coverName), `the v4 proxy is missing manual cover ${coverName}`);
+}
 assert(
-  proxyNodeNames.has("proxy_Floor Basement Floor"),
-  "the restored v3 proxy is missing its original floor projection surface",
+  proxyNodeNames.has("int_floor"),
+  "the v4 proxy is missing its configurable floor projection surface",
 );
-assert(proxyNodeNames.has("int_kitchen"), "the restored v3 proxy is missing int_kitchen");
+const kitchenNode = proxyJson.nodes.find((node) => node.name === "int_kitchen");
+assert(kitchenNode, "the v4 proxy is missing int_kitchen");
+const kitchenPrimitive = proxyJson.meshes[kitchenNode.mesh]?.primitives[0];
+assert(kitchenPrimitive, "the v4 proxy has no kitchen geometry");
+assert(kitchenPrimitive.indices !== undefined, "the v4 kitchen geometry is not indexed");
+const kitchenIndexAccessor = proxyJson.accessors[kitchenPrimitive.indices];
+assert(kitchenIndexAccessor, "the v4 kitchen index accessor is missing");
+assert(
+  kitchenIndexAccessor.count <= 600,
+  "the v4 kitchen proxy includes unrelated geometry that can create projection spikes",
+);
+const kitchenTopNode = proxyJson.nodes.find((node) => node.name === "visual_kitchen_tops");
+assert(kitchenTopNode, "the v4 proxy is missing its kitchen top cover");
+const kitchenTopMesh = proxyJson.meshes[kitchenTopNode.mesh];
+assert(
+  kitchenTopMesh?.extras?.meshtourRepair === "horizontal-kitchen-projection-cover",
+  "the v4 kitchen top cover is not marked as a projection repair",
+);
+const kitchenTopIndices = proxyJson.accessors[kitchenTopMesh.primitives[0].indices];
+assert(
+  kitchenTopIndices.count === 18,
+  "the v4 kitchen top cover must contain exactly three manual quads",
+);
 
 console.log(
   `Italian Flat v4 verified: ${config.configurator.groups.length} groups, ${config.configurator.presets.length} packages, ${actualFiles.length} local files`,

@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { repairItalianFlatV4Mesh } from "./repair-italian-flat-v4-mesh.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(projectRoot, "apps/demo/public/tours/italian-flat-v3/tour.json");
 const outputRoot = path.join(projectRoot, "apps/demo/public/tours/italian-flat-v4");
 const outputPath = path.join(outputRoot, "tour.json");
+await repairItalianFlatV4Mesh(projectRoot);
 const source = JSON.parse(await readFile(sourcePath, "utf8"));
 
 const EXTRA_NODES = [
@@ -35,14 +37,18 @@ const EXTRA_NODES = [
 source.name = "Italian Flat v4 — Property Configurator";
 source.assets.basePath = "./tours/italian-flat-v3/";
 source.assets.mesh = {
-  url: "mesh/v3_covered_windows.glb",
-  draco: false,
+  // v4's proxy keeps the configurable floor separate and limits the kitchen
+  // target to cabinet fronts. The inherited v3 kitchen joins unrelated
+  // carcasses and worktops, producing long projection triangles in dollhouse
+  // view at grazing angles.
+  url: "../italian-flat-v4/mesh/property-configurator-covered.glb",
+  draco: true,
 };
 
 source.configurables.push({
   id: "floor-finish",
   label: "Flooring",
-  interactable: "Floor_Basement_Floor",
+  interactable: "floor",
   default: "original",
   variants: [
     { id: "original", label: "Developer standard", swatch: "#8c8176" },

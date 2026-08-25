@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-24T18:29:56.553Z",
+  "generatedAt": "2026-08-25T12:15:57.715Z",
   "name": "Italian Flat v4 — Property Configurator",
   "inherits": "../italian-flat-v3",
   "files": [
@@ -155,6 +155,11 @@
       "sha256": "b7de1fca089945c4624ba13bf95033840de79208aaa160105df9ba2487723194"
     },
     {
+      "path": "mesh/property-configurator-covered.glb",
+      "bytes": 355108,
+      "sha256": "171786073d243368c527cfcaf76262ec1504f0d334018610749c36fcde5597d5"
+    },
+    {
       "path": "mesh/property-configurator.glb",
       "bytes": 272032,
       "sha256": "6949f1b5255828858d71a591aa980b85852f0f8e3cbfc2c4118193fde85558d0"
@@ -181,8 +186,8 @@
     },
     {
       "path": "tour.json",
-      "bytes": 21405,
-      "sha256": "753c7ff4721dffe05ffe9c138b699cdb951f848ddf32c6be0d522b8bd50e8eb4"
+      "bytes": 21419,
+      "sha256": "e72052194398d56fa15cafa47e6068efabb99dc584a35424cb2dba544c115826"
     }
   ]
 }

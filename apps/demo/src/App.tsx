@@ -39,7 +39,7 @@ const DEMO_TOURS = {
   },
   "italian-flat-v4": {
     loadingLabel: "Italian Flat v4",
-    config: "./tours/italian-flat-v4/tour.json?v=4",
+    config: "./tours/italian-flat-v4/tour.json?v=6",
     loadingDetail: "A connected residence with interactive material finishes",
     points: [
       { id: "kitchen", name: "Kitchen & Dining" },
