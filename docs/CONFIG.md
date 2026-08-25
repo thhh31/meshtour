@@ -140,6 +140,7 @@ Yaw/pitch are radians. Yaw 0 looks toward −Z, positive yaw turns left (counter
 | `interactables` | object     | –        | See below.                                                |
 | `spatial`       | object     | –        | Automatic plan/top view and measurement metadata.         |
 | `configurables` | object[]   | –        | Selectable panorama layers for proxy interactables.       |
+| `guides`        | Guide[]    | –        | Interactive, authored property stories.                   |
 | `links`         | Link[]     | –        | Shared navigation markers visible from every viewpoint.   |
 | `nodes`         | Node[]     | ✅ (≥1)  | Viewpoints. Ids must be unique.                           |
 | `hotspots`      | Hotspot[]  | –        | Shared and location-specific points of interest.          |
@@ -211,6 +212,141 @@ engine.on("variantchange", ({ configurableId, variantId }) => {
   // Synchronize the host UI, URL, saved design, or quotation.
 });
 ```
+
+Use `engine.setVariants({ ... })` when a package changes several appearances.
+All required layers are loaded and preuploaded before one atomic visual commit.
+
+### `configurator`
+
+The optional configurator is a buyer-facing product model above the low-level
+rendering bindings in `configurables`. Prices are integer minor currency units;
+`840000` means €8,400 when `currency` is `EUR`.
+
+```jsonc
+{
+  "configurator": {
+    "catalogVersion": "development-a-2026-08",
+    "currency": "EUR",
+    "basePriceMinor": 48500000,
+    "groups": [
+      {
+        "id": "flooring",
+        "label": "Flooring",
+        "default": "standard",
+        "options": [
+          {
+            "id": "standard",
+            "label": "Developer standard",
+            "sku": "FLR-STD",
+            "variants": { "floor-finish": "original" },
+          },
+          {
+            "id": "oak",
+            "label": "Natural oak",
+            "sku": "FLR-OAK",
+            "priceDeltaMinor": 840000,
+            "availability": "available",
+            "variants": { "floor-finish": "natural-oak" },
+            "requires": [{ "groupId": "kitchen", "optionIds": ["walnut"] }],
+          },
+        ],
+      },
+    ],
+    "presets": [
+      {
+        "id": "warm",
+        "label": "Warm Contemporary",
+        "selections": { "flooring": "oak", "kitchen": "walnut" },
+      },
+    ],
+  },
+}
+```
+
+Options support labels, descriptions, SKUs, swatches, thumbnails, product
+metadata, `available`/`on-request`/`unavailable` status, price deltas, visual
+variant mappings, and data-only `requires`/`excludes` constraints. Presets may
+be partial; omitted groups use their configured defaults.
+
+The core controller validates complete states and exposes:
+
+```ts
+await engine.selectConfigurationOption("flooring", "oak");
+await engine.applyConfigurationPreset("warm");
+const shareValue = engine.serializeConfiguration();
+await engine.restoreSerializedConfiguration(shareValue);
+const quote = engine.requestConfiguration(); // also emits configurationrequest
+```
+
+`configurationstatechange` fires for applying, ready, and error states. Quote
+payloads contain catalog revision, selections, selected preset, totals, and
+SKU-level line items. A commerce backend must re-resolve price and availability
+instead of trusting browser or URL values.
+
+### `guides`
+
+Guides are opt-in property stories layered over normal free exploration. A
+chapter can reproduce a panorama, dollhouse, or top-view camera; set configured
+measurements and finishes; and present concise plain-text sales copy. Visitors
+may navigate away at any time and resume the current chapter.
+
+```jsonc
+{
+  "guides": [
+    {
+      "id": "highlights",
+      "title": "Property highlights",
+      "description": "A short spatial introduction.",
+      "autoplay": { "stepDurationMs": 8000 },
+      "cta": { "id": "book", "label": "Book a viewing", "href": "/contact" },
+      "steps": [
+        {
+          "id": "layout",
+          "title": "A connected plan",
+          "body": "See how the living spaces relate.",
+          "view": {
+            "mode": "dollhouse",
+            "node": "living_room",
+            "position": [8, 7, 8],
+            "target": [2, 1, -3],
+            "fov": 45,
+          },
+          "measurementsVisible": false,
+          "variants": { "sofa-finish": "cream" },
+        },
+        {
+          "id": "living",
+          "title": "Room to gather",
+          "view": {
+            "mode": "panorama",
+            "node": "living_room",
+            "yaw": 0.4,
+            "pitch": -0.05,
+          },
+        },
+        {
+          "id": "dimensions",
+          "title": "Verify the footprint",
+          "view": { "mode": "top", "center": [2, -3], "zoom": 1 },
+          "measurementsVisible": true,
+        },
+      ],
+    },
+  ],
+}
+```
+
+Guide and step ids must be unique. Panorama and dollhouse `node` values must
+exist. Dollhouse snapshots use world-space `position` and `target`; top views
+use world X/Z `center` and zoom `0.65..5`. `variants` maps configurable ids to
+valid variant ids. Step `durationMs` overrides the guide autoplay dwell and must
+be between 3000 and 120000 ms. Autoplay is never started without a visitor
+pressing Play.
+
+The core API exposes `startGuide`, `stopGuide`, chapter navigation,
+play/pause/resume, `captureViewSnapshot`, and `applyViewSnapshot`. Guide events
+cover start, step changes, exploration, autoplay, completion, exit, CTA action,
+and errors so a host can connect its own analytics or CRM without SDK storage.
 
 ### `spatial`
 
@@ -336,10 +472,11 @@ the same physical hotspot for every panorama that can see it.
 ## Validation guarantees
 
 `validateConfig` rejects: unknown `version`, empty `nodes`, duplicate node,
-hotspot, configurable, measurement, or variant ids; invalid spatial bounds;
+hotspot, configurable, measurement, variant, guide, or guide-step ids; invalid spatial bounds;
 missing configurable defaults; and
 `start`/top-level or node-specific link targets/`hotspots[].node`/variant-layer
-references to nonexistent nodes. Defaults shown above are applied on parse.
+or guide references to nonexistent nodes/configurables/variants. Defaults shown
+above are applied on parse.
 
 ## Stability
 

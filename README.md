@@ -17,6 +17,8 @@ Flat panorama viewers (Pannellum, Marzipano, krpano, Kuula) display a sphere of 
 - **Walking transitions** — the camera moves through real 3D space between viewpoints while panoramas re-project onto the mesh. This is the signature feature.
 - **WebXR / VR mode** — headset pose is calibrated to each panorama node, with controller-ray hotspot selection and comfort teleports.
 - **Pre-rendered furniture variants** — transparent per-node panorama layers can replace an interactable's finish while retaining offline-rendered lighting and transition alignment.
+- **Buyer-ready configurators** — typed product groups, curated packages, compatibility rules, minor-unit pricing, share restoration, SKU quote payloads, and atomic multi-finish rendering.
+- **Guided property stories** — authored chapters combine walking transitions, exact camera framing, dollhouse/top views, dimensions, finishes, and a sales CTA while preserving free exploration.
 
 The closest commercial analogue is Matterport, but MeshTour's primary workflow is **same-source**: panoramas _and_ proxy mesh are exported from one 3D model (Blender, 3ds Max…), so alignment is exact and free. That makes it uniquely suited to **pre-construction real estate and archviz** — spaces that don't physically exist yet and cannot be scanned.
 
@@ -34,7 +36,7 @@ npm install @meshtour/react @meshtour/core three
 ```
 
 ```tsx
-import { Tour } from "@meshtour/react";
+import { Tour, TourGuidedControls } from "@meshtour/react";
 
 export function Apartment() {
   return (
@@ -43,7 +45,9 @@ export function Apartment() {
       style={{ height: "100dvh" }}
       onNodeChange={(id) => console.log("now at", id)}
       onHotspotClick={(hotspot) => console.log(hotspot.title)}
-    />
+    >
+      <TourGuidedControls />
+    </Tour>
   );
 }
 ```
@@ -92,7 +96,7 @@ The bundled demo uses the freely licensed **Italian Flat** scene by Flavio Della
 
 ## Author mode
 
-Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug overlay: toggle the proxy wireframe to verify alignment, click to place hotspots and links, drag either marker along surfaces, nudge per-panorama yaw, and copy/download the updated JSON. No backend, no persistence — paste the JSON into your tour file.
+Pass `authorMode: true` (or the `authorMode` prop) to get an in-canvas debug overlay: toggle the proxy wireframe, place hotspots and links, author transition paths, and capture/reorder/preview guided-story chapters from the current panorama, dollhouse, or top view. Copy or download the updated JSON; there is no backend or persistence.
 
 The bundled demo enables this panel when opened with `?author=1`, making the
 entire authoring workflow inspectable without changing source code.
@@ -114,6 +118,7 @@ entire authoring workflow inspectable without changing source code.
 packages/core       @meshtour/core — the engine
 packages/react      @meshtour/react — React bindings
 apps/demo           production-asset React demo (pnpm --filter @meshtour/demo dev)
+apps/property-configurator  buyer-facing Italian Flat v4 configurator
 assets-pipeline     Blender export guide and reproducible reference scripts
 docs                CONFIG.md and friends
 ```
