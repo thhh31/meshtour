@@ -31,10 +31,10 @@ export default tseslint.config(
   },
   {
     ...reactHooks.configs.flat["recommended-latest"],
-    files: ["packages/react/src/**/*.{ts,tsx}", "apps/demo/src/**/*.{ts,tsx}"],
+    files: ["packages/react/src/**/*.{ts,tsx}", "apps/*/src/**/*.{ts,tsx}"],
   },
   {
     ...reactRefresh.configs.vite,
-    files: ["apps/demo/src/**/*.{ts,tsx}"],
+    files: ["apps/*/src/**/*.{ts,tsx}"],
   },
 );
