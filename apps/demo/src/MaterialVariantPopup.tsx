@@ -1,4 +1,4 @@
-import { useTour } from "@meshtour/react";
+import { useTour, useTourConfiguration } from "@meshtour/react";
 import { useEffect, useState } from "react";
 
 interface MaterialVariantPopupProps {
@@ -9,9 +9,14 @@ interface MaterialVariantPopupProps {
 /** Config-driven material choices rendered inside an anchored hotspot popup. */
 export function MaterialVariantPopup({ configurableId, onClose }: MaterialVariantPopupProps) {
   const { engine, ready } = useTour();
+  const configurationApi = useTourConfiguration();
+  const { config: configurator, configuration } = configurationApi;
   const configurable = engine
     ?.getConfig()
     ?.configurables.find((entry) => entry.id === configurableId);
+  const configurationGroup = configurator?.groups.find((group) =>
+    group.options.some((option) => configurableId in option.variants),
+  );
   const [selected, setSelected] = useState(
     () => engine?.getVariant(configurableId) ?? configurable?.default ?? "",
   );
@@ -19,7 +24,11 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
   const [error, setError] = useState<string | null>(null);
   const [hoveredVariant, setHoveredVariant] = useState<string | null>(null);
 
-  const activeSelected = engine?.getVariant(configurableId) ?? selected;
+  const selectedGroupOption = configurationGroup?.options.find(
+    (option) => option.id === configuration?.selections[configurationGroup.id],
+  );
+  const activeSelected =
+    selectedGroupOption?.variants[configurableId] ?? engine?.getVariant(configurableId) ?? selected;
   const title = configurable?.label ?? "Material";
   const titleId = `material-title-${configurableId}`;
 
@@ -35,7 +44,14 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
     setLoading(variantId);
     setError(null);
     try {
-      await engine.setVariant(configurableId, variantId);
+      const configurationOption = configurationGroup?.options.find(
+        (option) => option.variants[configurableId] === variantId,
+      );
+      if (configurationGroup && configurationOption) {
+        await configurationApi.select(configurationGroup.id, configurationOption.id);
+      } else {
+        await engine.setVariant(configurableId, variantId);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -91,6 +107,9 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
           type="button"
           onClick={onClose}
           aria-label={`Close ${title.toLowerCase()}`}
+          data-tooltip={`Close ${title.toLowerCase()}`}
+          data-tooltip-align="end"
+          className="meshtour-control-tooltip"
           style={{
             border: 0,
             color: "rgba(255, 255, 255, 0.5)",
@@ -116,12 +135,26 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
           const active = activeSelected === variant.id;
           const pending = loading === variant.id;
           const hovered = hoveredVariant === variant.id && !active;
+          const configurationOption = configurationGroup?.options.find(
+            (option) => option.variants[configurableId] === variant.id,
+          );
+          const availability =
+            configurationGroup && configurationOption
+              ? configurationApi.getOptionAvailability(
+                  configurationGroup.id,
+                  configurationOption.id,
+                )
+              : null;
+          const unavailable = availability ? !availability.available : false;
           return (
             <button
               key={variant.id}
               type="button"
               aria-pressed={active}
-              disabled={!ready || loading !== null}
+              disabled={
+                !ready || loading !== null || configuration?.status === "applying" || unavailable
+              }
+              title={availability?.reason}
               onClick={() => void choose(variant.id)}
               onMouseEnter={() => setHoveredVariant(variant.id)}
               onMouseLeave={() => setHoveredVariant(null)}
@@ -144,7 +177,7 @@ export function MaterialVariantPopup({ configurableId, onClose }: MaterialVarian
                   : hovered
                     ? "rgba(255, 255, 255, 0.07)"
                     : "rgba(255, 255, 255, 0.035)",
-                cursor: ready && !loading ? "pointer" : "wait",
+                cursor: unavailable ? "not-allowed" : ready && !loading ? "pointer" : "wait",
                 textAlign: "left",
                 font: "inherit",
                 fontSize: 11.5,

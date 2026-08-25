@@ -15,10 +15,14 @@ async function clickHotspot(page: Page, hotspotId: string) {
   await page.mouse.click(box!.x + hotspotScreen.x, box!.y + hotspotScreen.y);
 }
 
-test("loads Italian Flat v3 by default and accepts an alternate tour URL", async ({ page }) => {
+test("loads the latest Italian Flat by default and accepts an alternate tour URL", async ({
+  page,
+}) => {
   await page.goto("/?test=1");
   await page.waitForFunction(
-    () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v3",
+    () =>
+      window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name ===
+      "Italian Flat v4 — Property Configurator",
   );
 
   await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
@@ -27,7 +31,7 @@ test("loads Italian Flat v3 by default and accepts an alternate tour URL", async
   );
   expect(
     await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getConfig()!.nodes.length),
-  ).toBe(3);
+  ).toBe(5);
   await expect(page.locator(".demo-title")).toHaveCount(0);
   await expect(page.locator(".demo-scene-switcher")).toHaveCount(0);
 
@@ -36,6 +40,290 @@ test("loads Italian Flat v3 by default and accepts an alternate tour URL", async
     () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v2",
   );
   await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toBeVisible();
+});
+
+test("opens the demo material selector and changes flooring", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/?test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  const launcher = page.getByRole("button", { name: /Materials/ });
+  await expect(launcher).toBeVisible();
+  await expect(launcher.locator(".materials-panel-launcher-label")).toHaveCSS(
+    "writing-mode",
+    "vertical-rl",
+  );
+  await expect(page.getByRole("complementary", { name: "Material selector" })).toBeHidden();
+  const openingClasses = await page.evaluate(() => {
+    const panel = document.querySelector(".materials-panel")!;
+    const launcher = document.querySelector<HTMLButtonElement>(".materials-panel-launcher")!;
+
+    return new Promise<string[]>((resolve) => {
+      const classes = [panel.className];
+      let timeout = 0;
+      const finish = () => {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        resolve(classes);
+      };
+      const observer = new MutationObserver(() => {
+        classes.push(panel.className);
+        if (panel.classList.contains("is-open")) finish();
+      });
+      observer.observe(panel, { attributes: true, attributeFilter: ["class"] });
+      launcher.click();
+      timeout = window.setTimeout(finish, 5_000);
+    });
+  });
+
+  expect(openingClasses).toContain("materials-panel is-visible");
+  expect(openingClasses).toContain("materials-panel is-visible is-open");
+
+  const panel = page.getByRole("complementary", { name: "Material selector" });
+  await expect(panel).toBeVisible();
+  await expect(page.locator(".materials-panel-backdrop")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(panel.getByText("Flooring", { exact: true })).toBeVisible();
+  const oak = panel.locator(".materials-option").filter({ hasText: "Natural European oak" });
+  await oak.click();
+  await expect(oak).toHaveAttribute("aria-pressed", "true", { timeout: 45_000 });
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getVariant("floor-finish")))
+    .toBe("natural-oak");
+
+  await panel.getByRole("button", { name: "Close materials" }).click();
+  await expect(panel).toBeHidden();
+  await expect(launcher).toBeVisible();
+});
+
+test("opens configured v4 material hotspots in synchronized popups", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/?test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  const panel = page.getByRole("complementary", { name: "Material selector" });
+  await clickHotspot(page, "sofa_materials");
+  const sofaPopup = page.getByRole("dialog", { name: "Sofa finish" });
+  await expect(sofaPopup).toBeVisible();
+  await expect(panel).toBeHidden();
+  await sofaPopup.getByRole("button", { name: "Terracotta" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getVariant("sofa-finish")))
+    .toBe("terracotta");
+  await sofaPopup.getByRole("button", { name: "Close sofa finish" }).click();
+
+  await clickHotspot(page, "floor_finishes");
+  const flooringPopup = page.getByRole("dialog", { name: "Flooring" });
+  await expect(flooringPopup).toBeVisible();
+  await flooringPopup.getByRole("button", { name: "Natural European oak" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getVariant("floor-finish")))
+    .toBe("natural-oak");
+
+  await flooringPopup.getByRole("button", { name: "Close flooring" }).click();
+  await page.getByRole("button", { name: /Materials/ }).click();
+  await expect(
+    panel.locator(".materials-group-trigger").filter({ hasText: "Natural European oak" }),
+  ).toBeVisible();
+});
+
+test("collapses the guided tour into a compact launcher", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/?test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  await page.getByRole("button", { name: "Explore on my own" }).click();
+  const launcher = page.getByRole("button", { name: "Open guided tour" });
+  await expect(launcher).toBeVisible();
+  const launcherBox = await launcher.boundingBox();
+  expect(launcherBox).not.toBeNull();
+  expect(launcherBox!.x).toBeLessThan(24);
+  expect(launcherBox!.width).toBeLessThanOrEqual(44);
+
+  await launcher.click();
+  await page.getByRole("button", { name: /Start guided tour/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
+      timeout: 45_000,
+    })
+    .toBe("presenting");
+
+  await page.getByRole("button", { name: "Close guided tour" }).click();
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await expect(page.getByRole("button", { name: /Start guided tour/ })).toBeVisible();
+});
+
+test("runs an interruptible spatial property story and restores visitor choices", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await page.goto("/?test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  const start = page.getByRole("button", { name: /Start guided tour/ });
+  await expect(start).toBeVisible();
+  await start.click();
+  await expect(page.getByText("One connected living sequence")).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
+      timeout: 45_000,
+    })
+    .toBe("presenting");
+  expect(await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getViewMode())).toBe(
+    "dollhouse",
+  );
+  const dollhouseSnapshot = await page.evaluate(() =>
+    window.__MESHTOUR_TEST_ENGINE__!.captureViewSnapshot(),
+  );
+  expect(dollhouseSnapshot.mode).toBe("dollhouse");
+  if (dollhouseSnapshot.mode !== "dollhouse") throw new Error("Expected dollhouse snapshot");
+  expect(dollhouseSnapshot.node).toBe("living");
+  expect(dollhouseSnapshot.fov).toBe(45);
+  dollhouseSnapshot.position.forEach((value, index) => {
+    expect(value).toBeCloseTo([14.2, 10.2, 6.4][index]!, 6);
+  });
+  dollhouseSnapshot.target.forEach((value, index) => {
+    expect(value).toBeCloseTo([3.49, 0.9, -4.95][index]!, 6);
+  });
+
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByText("A living room you can make your own")).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => ({
+          status: window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status,
+          node: window.__MESHTOUR_TEST_ENGINE__!.getCurrentNode(),
+          sofa: window.__MESHTOUR_TEST_ENGINE__!.getVariant("sofa-finish"),
+        })),
+      { timeout: 60_000 },
+    )
+    .toEqual({ status: "presenting", node: "living", sofa: "ivory-boucle" });
+
+  await page.getByRole("button", { name: "Library Lounge" }).click();
+  await expect(page.getByRole("button", { name: "Resume chapter" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
+    .toBe("exploring");
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getCurrentNode()), {
+      timeout: 60_000,
+    })
+    .toBe("lounge");
+  await page.getByRole("button", { name: "Resume chapter" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getCurrentNode()), {
+      timeout: 60_000,
+    })
+    .toBe("living");
+
+  await page.getByRole("button", { name: /Go to chapter 4:/ }).click();
+  await expect(page.getByText("Verify the footprint, not just the mood")).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => ({
+          status: window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status,
+          mode: window.__MESHTOUR_TEST_ENGINE__!.getViewMode(),
+          measurements: window.__MESHTOUR_TEST_ENGINE__!.areMeasurementsVisible(),
+        })),
+      { timeout: 60_000 },
+    )
+    .toEqual({ status: "presenting", mode: "top", measurements: true });
+  const topSnapshot = await page.evaluate(() =>
+    window.__MESHTOUR_TEST_ENGINE__!.captureViewSnapshot(),
+  );
+  expect(topSnapshot.mode).toBe("top");
+  if (topSnapshot.mode !== "top") throw new Error("Expected top-view snapshot");
+  expect(topSnapshot.center[0]).toBeCloseTo(3.49, 6);
+  expect(topSnapshot.center[1]).toBeCloseTo(-4.9495, 6);
+  expect(topSnapshot.zoom).toBeCloseTo(1, 6);
+
+  await page.getByRole("button", { name: /Go to chapter 5:/ }).click();
+  const cta = page.getByRole("link", { name: "Book a private viewing" });
+  await expect(cta).toBeVisible();
+  await page.evaluate(() => {
+    (window as typeof window & { __GUIDE_ACTIONS__?: number }).__GUIDE_ACTIONS__ = 0;
+    window.__MESHTOUR_TEST_ENGINE__!.on("guideaction", () => {
+      const target = window as typeof window & { __GUIDE_ACTIONS__?: number };
+      target.__GUIDE_ACTIONS__ = (target.__GUIDE_ACTIONS__ ?? 0) + 1;
+    });
+  });
+  await cta.click();
+  expect(await page.evaluate(() => location.hash)).toBe("#book-viewing");
+  expect(
+    await page.evaluate(
+      () => (window as typeof window & { __GUIDE_ACTIONS__?: number }).__GUIDE_ACTIONS__,
+    ),
+  ).toBe(1);
+
+  await page.getByRole("button", { name: "Close guided tour" }).click();
+  const reopen = page.getByRole("button", { name: "Open guided tour" });
+  await expect(reopen).toBeVisible();
+  await expect(page.getByRole("button", { name: /Start guided tour/ })).toHaveCount(0);
+  await reopen.click();
+  await expect(page.getByRole("button", { name: /Start guided tour/ })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        status: window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status,
+        sofa: window.__MESHTOUR_TEST_ENGINE__!.getVariant("sofa-finish"),
+        measurements: window.__MESHTOUR_TEST_ENGINE__!.areMeasurementsVisible(),
+      })),
+    )
+    .toEqual({ status: "idle", sofa: "original", measurements: false });
+});
+
+test("honors reduced motion while applying a guided chapter", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/?test=1");
+  await page.getByRole("button", { name: /Start guided tour/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
+    .toBe("presenting");
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
+    .toBe("presenting");
+  const view = await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getView());
+  expect(view.yaw).toBeCloseTo(-0.295, 3);
+  expect(view.pitch).toBeCloseTo(-0.03, 3);
+});
+
+test("captures, recaptures, and reorders guided chapters in author mode", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/?test=1&author=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.isAuthorMode());
+  const panel = page.locator(".meshtour-author-panel");
+  await expect(panel.getByText("Guided stories")).toBeVisible();
+
+  const answers = ["Buyer perspective", "A newly captured sales chapter"];
+  page.on("dialog", async (dialog) => {
+    await dialog.accept(answers.shift() ?? "");
+  });
+  await panel.getByRole("button", { name: "Capture current chapter" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getConfig()!.guides[0]!.steps.length),
+    )
+    .toBe(6);
+
+  await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.setView(0.8, -0.1));
+  await panel.getByRole("button", { name: "Recapture" }).last().click();
+  const capturedView = await page.evaluate(
+    () => window.__MESHTOUR_TEST_ENGINE__!.getConfig()!.guides[0]!.steps.at(-1)!.view,
+  );
+  expect(capturedView).toMatchObject({ mode: "panorama", node: "living", yaw: 0.8, pitch: -0.1 });
+
+  await panel.getByRole("button", { name: "↑" }).last().click();
+  expect(
+    await page.evaluate(
+      () => window.__MESHTOUR_TEST_ENGINE__!.getConfig()!.guides[0]!.steps.at(-2)!.title,
+    ),
+  ).toBe("Buyer perspective");
 });
 
 test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async ({ page }) => {
@@ -59,6 +347,9 @@ test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async 
   await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
     "aria-current",
     "location",
+  );
+  await page.evaluate(() =>
+    window.__MESHTOUR_TEST_ENGINE__!.setVariant("sofa-finish", "terracotta"),
   );
 
   await expect(page.getByRole("button", { name: "Open dollhouse view" })).toBeVisible();
@@ -106,6 +397,61 @@ test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async 
       }),
     )
     .toBe("disabled");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const textures = new Set<string>();
+        window.__MESHTOUR_TEST_ENGINE__!.getScene().traverse((object) => {
+          const material = (object as { material?: { name?: string; uniforms?: object } }).material;
+          if (!material?.name?.endsWith("_layer") || !material.uniforms) return;
+          const uniforms = material.uniforms as Record<string, { value?: unknown }>;
+          for (let index = 0; `uHasLayer${index}` in uniforms; index += 1) {
+            if (uniforms[`uHasLayer${index}`]?.value !== 1) continue;
+            const texture = uniforms[`uLayer${index}`]?.value as { uuid?: string } | undefined;
+            if (texture?.uuid) textures.add(texture.uuid);
+          }
+        });
+        return [...textures].sort();
+      }),
+    )
+    .not.toEqual([]);
+  const selectedLayerTextures = await page.evaluate(() => {
+    const textures = new Set<string>();
+    window.__MESHTOUR_TEST_ENGINE__!.getScene().traverse((object) => {
+      const material = (object as { material?: { name?: string; uniforms?: object } }).material;
+      if (!material?.name?.endsWith("_layer") || !material.uniforms) return;
+      const uniforms = material.uniforms as Record<string, { value?: unknown }>;
+      for (let index = 0; `uHasLayer${index}` in uniforms; index += 1) {
+        if (uniforms[`uHasLayer${index}`]?.value !== 1) continue;
+        const texture = uniforms[`uLayer${index}`]?.value as { uuid?: string } | undefined;
+        if (texture?.uuid) textures.add(texture.uuid);
+      }
+    });
+    return [...textures].sort();
+  });
+
+  await page.evaluate(() =>
+    window.__MESHTOUR_TEST_ENGINE__!.setVariant("sofa-finish", "ivory-boucle"),
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const textures = new Set<string>();
+        window.__MESHTOUR_TEST_ENGINE__!.getScene().traverse((object) => {
+          const material = (object as { material?: { name?: string; uniforms?: object } }).material;
+          if (!material?.name?.endsWith("_layer") || !material.uniforms) return;
+          const uniforms = material.uniforms as Record<string, { value?: unknown }>;
+          for (let index = 0; `uHasLayer${index}` in uniforms; index += 1) {
+            if (uniforms[`uHasLayer${index}`]?.value !== 1) continue;
+            const texture = uniforms[`uLayer${index}`]?.value as { uuid?: string } | undefined;
+            if (texture?.uuid) textures.add(texture.uuid);
+          }
+        });
+        return [...textures].sort();
+      }),
+    )
+    .not.toEqual(selectedLayerTextures);
 
   await page.getByRole("button", { name: "Return to panorama" }).click();
   await expect(page.getByRole("button", { name: "Open dollhouse view" })).toHaveAttribute(
@@ -412,6 +758,7 @@ test("disables point buttons until a scene transition finishes", async ({ page }
 });
 
 test("loads the production tour and walks between nodes", async ({ page }) => {
+  test.setTimeout(90_000);
   const consoleProblems: string[] = [];
   const assetResponses = new Map<string, number>();
 
@@ -462,11 +809,13 @@ test("loads the production tour and walks between nodes", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
     "aria-current",
     "location",
+    { timeout: 45_000 },
   );
   await page.getByRole("button", { name: "Kitchen & Dining" }).click();
   await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toHaveAttribute(
     "aria-current",
     "location",
+    { timeout: 45_000 },
   );
   const viewAfterNavigation = await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getView());
   expect(viewAfterNavigation.yaw).toBeCloseTo(viewBeforeNavigation.yaw, 4);

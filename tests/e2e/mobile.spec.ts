@@ -13,6 +13,118 @@ test("keeps the dollhouse toggle inside a phone viewport", async ({ page }) => {
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
 });
 
+test("keeps the collapsed material selector and panel inside a phone viewport", async ({
+  page,
+}) => {
+  await page.goto("/?tour=italian-flat-v4&test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  const launcher = page.getByRole("button", { name: /Materials/ });
+  const panel = page.getByRole("complementary", { name: "Material selector" });
+  await expect(launcher).toBeVisible();
+  await expect(panel).toBeHidden();
+  await launcher.click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+
+  const box = await panel.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+});
+
+test("keeps the selected tour point visible after the viewport changes", async ({ page }) => {
+  await page.goto("/?tour=italian-flat-v3&test=1");
+  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
+    "aria-current",
+    "location",
+  );
+
+  const indicator = page
+    .getByRole("navigation", { name: "Tour points" })
+    .locator(":scope > div[aria-hidden='true']");
+  await expect(indicator).toHaveCSS("opacity", "1");
+
+  await page.setViewportSize({ width: 545, height: 720 });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  await expect(indicator).toHaveCSS("opacity", "1");
+});
+
+test("keeps the selection pill aligned with the active tour point", async ({ page }) => {
+  await page.goto("/?tour=italian-flat-v4&test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
+
+  const navigation = page.getByRole("navigation", { name: "Tour points" });
+  const target = navigation.getByRole("button", { name: "Point 4: Living Window", exact: true });
+  const indicator = navigation.locator(":scope > div[aria-hidden='true']");
+
+  await target.click();
+  await expect(target).toHaveAttribute("aria-current", "location", { timeout: 45_000 });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  const targetBox = await target.boundingBox();
+  const indicatorBox = await indicator.boundingBox();
+  expect(targetBox).not.toBeNull();
+  expect(indicatorBox).not.toBeNull();
+  expect(Math.abs(indicatorBox!.x - targetBox!.x)).toBeLessThan(1);
+  expect(Math.abs(indicatorBox!.width - targetBox!.width)).toBeLessThan(1);
+
+  const navigationBox = await navigation.boundingBox();
+  expect(navigationBox).not.toBeNull();
+  expect(targetBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
+  expect(targetBox!.x + targetBox!.width).toBeLessThanOrEqual(
+    navigationBox!.x + navigationBox!.width,
+  );
+});
+
+test("keeps the guided-story card and actions inside a phone viewport", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/?test=1");
+  const start = page.getByRole("button", { name: /Start guided tour/ });
+  await expect(start).toBeVisible();
+  const viewport = page.viewportSize();
+  const invitation = page.getByRole("complementary", { name: "Guided property tour" });
+  const invitationBox = await invitation.boundingBox();
+  expect(viewport).not.toBeNull();
+  expect(invitationBox).not.toBeNull();
+  expect(invitationBox!.x).toBeGreaterThanOrEqual(0);
+  expect(invitationBox!.x + invitationBox!.width).toBeLessThanOrEqual(viewport!.width);
+
+  await page.getByRole("button", { name: "Explore on my own" }).click();
+  const launcher = page.getByRole("button", { name: "Open guided tour" });
+  await expect(launcher).toBeVisible();
+  const launcherBox = await launcher.boundingBox();
+  expect(launcherBox).not.toBeNull();
+  expect(launcherBox!.x).toBeLessThan(24);
+  expect(launcherBox!.width).toBeLessThanOrEqual(44);
+  await launcher.click();
+
+  await start.click();
+  const story = page.getByRole("region", { name: /guided tour/ });
+  await expect(story).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
+      timeout: 45_000,
+    })
+    .toBe("presenting");
+  const storyBox = await story.boundingBox();
+  expect(storyBox).not.toBeNull();
+  expect(storyBox!.x).toBeGreaterThanOrEqual(0);
+  expect(storyBox!.x + storyBox!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(storyBox!.y + storyBox!.height).toBeLessThanOrEqual(viewport!.height);
+  await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
+});
+
 test("keeps the tour controls usable on a phone viewport", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/?tour=italian-flat&test=1");

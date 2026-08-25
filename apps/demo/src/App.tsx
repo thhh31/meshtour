@@ -1,8 +1,10 @@
-import { Tour, TourSpatialControls } from "@meshtour/react";
-import type { TourEngine } from "@meshtour/core";
-import type { CSSProperties } from "react";
+import { Tour, TourGuidedControls, TourSpatialControls } from "@meshtour/react";
+import type { HotspotConfig, TourEngine } from "@meshtour/core";
+import { useState, type CSSProperties } from "react";
 import { NodeSwitcher } from "./NodeSwitcher";
 import { MaterialVariantPopup } from "./MaterialVariantPopup";
+import { MaterialsPanel } from "./MaterialsPanel";
+import { MATERIAL_PANEL_GROUPS } from "./materialUiConfig";
 
 const DEMO_TOURS = {
   "italian-flat": {
@@ -35,6 +37,18 @@ const DEMO_TOURS = {
       { id: "lounge", name: "Library Lounge" },
     ],
   },
+  "italian-flat-v4": {
+    loadingLabel: "Italian Flat v4",
+    config: "./tours/italian-flat-v4/tour.json?v=4",
+    loadingDetail: "A connected residence with interactive material finishes",
+    points: [
+      { id: "kitchen", name: "Kitchen & Dining" },
+      { id: "kitchen-window", name: "Kitchen Window" },
+      { id: "living", name: "Living Room" },
+      { id: "living-window", name: "Living Window" },
+      { id: "lounge", name: "Library Lounge" },
+    ],
+  },
 } as const;
 
 type DemoTourId = keyof typeof DEMO_TOURS;
@@ -47,7 +61,7 @@ const REQUESTED_TOUR = SEARCH_PARAMS.get("tour");
 const INITIAL_TOUR: DemoTourId =
   REQUESTED_TOUR !== null && Object.hasOwn(DEMO_TOURS, REQUESTED_TOUR)
     ? (REQUESTED_TOUR as DemoTourId)
-    : "italian-flat-v3";
+    : "italian-flat-v4";
 const AUTHOR_MODE = SEARCH_PARAMS.has("author");
 const TEST_MODE = SEARCH_PARAMS.has("test");
 const ENGINE_OPTIONS = {
@@ -84,9 +98,66 @@ if (TEST_MODE) {
   window.__MESHTOUR_TEST_EVENTS__ = { hovered: null, clicked: null };
 }
 
+const MATERIAL_GROUP_BY_CONFIGURABLE: Record<string, string> = {
+  "floor-finish": "flooring",
+  "sofa-finish": "sofa",
+  "rug-finish": "rug",
+  "lounge-chair-style": "chair",
+};
+
+const CONFIGURABLE_BY_MATERIAL_GROUP: Record<string, string> = {
+  flooring: "floor-finish",
+  sofa: "sofa-finish",
+  rug: "rug-finish",
+  chair: "lounge-chair-style",
+};
+
+type MaterialHotspotTarget = "popup" | "panel";
+
+/** Change a panel-supported group to "panel" to route its hotspot into the side panel. */
+const MATERIAL_HOTSPOT_TARGETS: Partial<
+  Record<DemoTourId, Readonly<Record<string, MaterialHotspotTarget>>>
+> = {
+  "italian-flat-v4": {
+    flooring: "popup",
+    sofa: "popup",
+    rug: "popup",
+    chair: "popup",
+  },
+};
+
+function getMaterialGroup(hotspot: HotspotConfig): string | null {
+  const payload = hotspot.payload;
+  if (!payload || typeof payload !== "object") return null;
+  if ("configurationGroup" in payload && typeof payload.configurationGroup === "string") {
+    return payload.configurationGroup;
+  }
+  if ("configurableId" in payload && typeof payload.configurableId === "string") {
+    return MATERIAL_GROUP_BY_CONFIGURABLE[payload.configurableId] ?? null;
+  }
+  return null;
+}
+
+function getMaterialConfigurableId(hotspot: HotspotConfig): string | null {
+  const payload = hotspot.payload;
+  if (!payload || typeof payload !== "object") return null;
+  if ("configurableId" in payload && typeof payload.configurableId === "string") {
+    return payload.configurableId;
+  }
+  const groupId = getMaterialGroup(hotspot);
+  return groupId ? (CONFIGURABLE_BY_MATERIAL_GROUP[groupId] ?? null) : null;
+}
+
+function getMaterialHotspotTarget(tourId: DemoTourId, groupId: string): MaterialHotspotTarget {
+  const configuredTarget = MATERIAL_HOTSPOT_TARGETS[tourId]?.[groupId] ?? "popup";
+  return configuredTarget === "panel" && MATERIAL_PANEL_GROUPS.has(groupId) ? "panel" : "popup";
+}
+
 export function App() {
   const tourId = INITIAL_TOUR;
   const activeTour = DEMO_TOURS[tourId];
+  const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [activeMaterialGroup, setActiveMaterialGroup] = useState<string | null>("flooring");
 
   return (
     <Tour
@@ -100,6 +171,13 @@ export function App() {
       }}
       onTransitionStart={() => performance.mark("meshtour-transition-start")}
       onTransitionEnd={() => performance.mark("meshtour-transition-end")}
+      onHotspotClick={(hotspot) => {
+        if (tourId !== "italian-flat-v4") return;
+        const groupId = getMaterialGroup(hotspot);
+        if (!groupId || getMaterialHotspotTarget(tourId, groupId) !== "panel") return;
+        setActiveMaterialGroup(groupId);
+        setMaterialsOpen(true);
+      }}
       onInteractableHover={(id) => {
         if (TEST_MODE && window.__MESHTOUR_TEST_EVENTS__) {
           window.__MESHTOUR_TEST_EVENTS__.hovered = id;
@@ -195,11 +273,21 @@ export function App() {
           </div>
         </div>
       )}
-      hotspotRenderer={(hotspot, { close }) =>
-        typeof hotspot.payload === "object" &&
-        hotspot.payload !== null &&
-        "configurableId" in hotspot.payload &&
-        typeof hotspot.payload.configurableId === "string" ? (
+      hotspotRenderer={(hotspot, { close }) => {
+        if (tourId === "italian-flat-v4") {
+          const groupId = getMaterialGroup(hotspot);
+          if (groupId) {
+            if (getMaterialHotspotTarget(tourId, groupId) === "panel") return null;
+            const configurableId = getMaterialConfigurableId(hotspot);
+            if (configurableId) {
+              return <MaterialVariantPopup configurableId={configurableId} onClose={close} />;
+            }
+          }
+        }
+        return typeof hotspot.payload === "object" &&
+          hotspot.payload !== null &&
+          "configurableId" in hotspot.payload &&
+          typeof hotspot.payload.configurableId === "string" ? (
           <MaterialVariantPopup configurableId={hotspot.payload.configurableId} onClose={close} />
         ) : (
           <div
@@ -251,6 +339,9 @@ export function App() {
                 onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)")}
                 aria-label="Close"
+                data-tooltip="Close"
+                data-tooltip-align="end"
+                className="meshtour-control-tooltip"
               >
                 ×
               </button>
@@ -270,11 +361,20 @@ export function App() {
               </p>
             ) : null}
           </div>
-        )
-      }
+        );
+      }}
     >
       <TourSpatialControls />
+      <TourGuidedControls />
       <NodeSwitcher nodes={activeTour.points} />
+      {tourId === "italian-flat-v4" ? (
+        <MaterialsPanel
+          open={materialsOpen}
+          activeGroup={activeMaterialGroup}
+          onOpenChange={setMaterialsOpen}
+          onActiveGroupChange={setActiveMaterialGroup}
+        />
+      ) : null}
     </Tour>
   );
 }

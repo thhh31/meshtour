@@ -199,6 +199,88 @@
       ]
     }
   ],
+  "guides": [
+    {
+      "id": "property-highlights",
+      "title": "A considered Italian home",
+      "description": "Follow the spatial story, then step away at any point to inspect the apartment for yourself.",
+      "autoplay": {
+        "stepDurationMs": 8000
+      },
+      "cta": {
+        "id": "book-viewing",
+        "label": "Book a private viewing",
+        "href": "#book-viewing"
+      },
+      "steps": [
+        {
+          "id": "connected-layout",
+          "title": "One connected living sequence",
+          "body": "The kitchen, dining room, living area and library read as distinct places while remaining visually connected from end to end.",
+          "view": {
+            "mode": "dollhouse",
+            "node": "living",
+            "position": [14.2, 10.2, 6.4],
+            "target": [3.49, 0.9, -4.95],
+            "fov": 45
+          },
+          "measurementsVisible": false
+        },
+        {
+          "id": "flexible-living",
+          "title": "A living room you can make your own",
+          "body": "The central lounge keeps generous circulation around a full sofa group. This chapter previews a lighter bouclé finish without changing the underlying architecture.",
+          "view": {
+            "mode": "panorama",
+            "node": "living",
+            "yaw": -0.295,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false,
+          "variants": {
+            "sofa-finish": "ivory-boucle",
+            "rug-finish": "sage-weave"
+          }
+        },
+        {
+          "id": "kitchen-arrival",
+          "title": "Kitchen and dining share the daylight",
+          "body": "A direct walking transition makes the relationship between preparation, dining and the main living room immediately understandable.",
+          "view": {
+            "mode": "panorama",
+            "node": "kitchen",
+            "yaw": 2.04,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false
+        },
+        {
+          "id": "measured-plan",
+          "title": "Verify the footprint, not just the mood",
+          "body": "The measured top view returns the experience to real dimensions, helping buyers compare furniture, circulation and usable floor area with confidence.",
+          "view": {
+            "mode": "top",
+            "center": [3.49, -4.9495],
+            "zoom": 1
+          },
+          "measurementsVisible": true
+        },
+        {
+          "id": "library-retreat",
+          "title": "A quieter room at the far end",
+          "body": "The library lounge completes the journey with a more private place to read, work or host a smaller conversation.",
+          "view": {
+            "mode": "panorama",
+            "node": "lounge",
+            "yaw": -2.075,
+            "pitch": -0.03
+          },
+          "measurementsVisible": false,
+          "durationMs": 10000
+        }
+      ]
+    }
+  ],
   "links": [
     {
       "to": "kitchen",

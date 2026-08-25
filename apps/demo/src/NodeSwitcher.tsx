@@ -16,6 +16,7 @@ interface IndicatorState {
   width: number;
   height: number;
   ready: boolean;
+  animate: boolean;
 }
 
 /** Persistent bottom navigation driven by the public useTour() API with smooth sliding pill animation. */
@@ -63,7 +64,7 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
 
     const navRect = navEl.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
-    const left = elRect.left - navRect.left + navEl.scrollLeft;
+    const left = elRect.left - navRect.left - navEl.clientLeft + navEl.scrollLeft;
     const width = elRect.width;
     const height = elRect.height;
 
@@ -81,7 +82,8 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
         left,
         width,
         height,
-        ready: animate ? (prev?.ready ?? false) : false,
+        ready: prev?.ready ?? false,
+        animate,
       };
     });
   };
@@ -97,16 +99,33 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
 
   useEffect(() => {
     updateIndicatorFor(activeNodeId, true);
-  }, [activeNodeId]);
+    if (!activeNodeId || compact) return;
 
-  useEffect(() => {
+    const navEl = navRef.current;
+    const el = buttonRefs.current.get(activeNodeId);
+    if (!navEl || !el) return;
+
+    const left = el.offsetLeft + el.offsetWidth / 2 - navEl.clientWidth / 2;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    navEl.scrollTo({
+      left: Math.max(0, left),
+      behavior: visualTarget && !reduceMotion ? "smooth" : "auto",
+    });
+    // Scrolling moves the indicator and its button together because both use
+    // the navigation rail's content coordinate system.
+  }, [activeNodeId, compact, visualTarget]);
+
+  useLayoutEffect(() => {
     const navEl = navRef.current;
     if (!navEl) return;
 
+    // Button widths change when the selected font weight changes. Keep the
+    // observer tied to the latest selection so that resize notifications
+    // cannot move the indicator back to a previously selected node.
     const handleResize = () => updateIndicatorFor(activeNodeId, false);
     window.addEventListener("resize", handleResize);
 
-    const observer = new ResizeObserver(() => updateIndicatorFor(activeNodeId, false));
+    const observer = new ResizeObserver(handleResize);
     observer.observe(navEl);
     for (const button of buttonRefs.current.values()) {
       if (button) observer.observe(button);
@@ -116,12 +135,12 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
       window.removeEventListener("resize", handleResize);
       observer.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes]);
+  }, [nodes, activeNodeId]);
 
   return (
     <nav
       ref={navRef}
+      className="tour-point-navigation"
       style={{
         position: "absolute",
         zIndex: 40,
@@ -130,7 +149,7 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
         transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: compact ? "center" : "flex-start",
         gap: 4,
         pointerEvents: "auto",
         background: "rgba(9, 10, 14, 0.65)",
@@ -143,6 +162,9 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
         width: compact ? "min(520px, calc(100vw - 24px))" : "max-content",
         maxWidth: "calc(100vw - 24px)",
         overflowX: compact ? "visible" : "auto",
+        overscrollBehaviorX: "contain",
+        scrollbarWidth: "none",
+        scrollSnapType: compact ? "none" : "x proximity",
         boxSizing: "border-box",
       }}
       aria-label="Tour points"
@@ -163,9 +185,10 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
             pointerEvents: "none",
             zIndex: 1,
             opacity: indicator.ready ? 1 : 0,
-            transition: indicator.ready
-              ? "transform 320ms cubic-bezier(0.2, 0.9, 0.25, 1), width 320ms cubic-bezier(0.2, 0.9, 0.25, 1), height 320ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity 150ms ease"
-              : "opacity 150ms ease",
+            transition:
+              indicator.ready && indicator.animate
+                ? "transform 320ms cubic-bezier(0.2, 0.9, 0.25, 1), width 320ms cubic-bezier(0.2, 0.9, 0.25, 1), height 320ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity 150ms ease"
+                : "opacity 150ms ease",
           }}
         />
       ) : null}
@@ -195,6 +218,7 @@ export function NodeSwitcher({ nodes }: NodeSwitcherProps) {
               justifyContent: "center",
               gap: 8,
               flex: compact ? "1 1 0" : "0 0 auto",
+              scrollSnapAlign: compact ? "none" : "center",
               minWidth: 0,
               minHeight: 40,
               background: hovered ? "rgba(255, 255, 255, 0.07)" : "transparent",
