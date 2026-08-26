@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-19T18:59:47.780Z",
+  "generatedAt": "2026-11-09T13:36:44.307Z",
   "source": {
     "name": "Italian Flat",
     "author": "Flavio Della Tommasa",
@@ -16,14 +16,9 @@
   },
   "files": [
     {
-      "path": ".DS_Store",
-      "bytes": 8196,
-      "sha256": "d53b09a740ea37bdc71e8c97577cb847d6a03431929f8282d5e7b73c9d8f93ec"
-    },
-    {
       "path": "ATTRIBUTION.md",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "bytes": 473,
+      "sha256": "9f258370cecb2454c3ce62d0bd6e4a04c6d062dacdd15f1ac6d69bda91f6a114"
     },
     {
       "path": "layers/chair/cognac-leather/living_4k.png",

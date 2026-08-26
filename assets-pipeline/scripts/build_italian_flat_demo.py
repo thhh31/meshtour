@@ -743,10 +743,13 @@ def sha256(path: Path) -> str:
 def write_manifest(output: Path, proxy_stats: dict[str, int] | None) -> None:
     files = []
     for path in sorted(output.rglob("*")):
+        relative = path.relative_to(output)
+        if any(part.startswith(".") for part in relative.parts):
+            continue
         if path.is_file() and path.name != "manifest.json":
             files.append(
                 {
-                    "path": path.relative_to(output).as_posix(),
+                    "path": relative.as_posix(),
                     "bytes": path.stat().st_size,
                     "sha256": sha256(path),
                 }

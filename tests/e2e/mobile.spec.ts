@@ -39,10 +39,11 @@ test("keeps the collapsed material selector and panel inside a phone viewport", 
 
 test("keeps the selected tour point visible after the viewport changes", async ({ page }) => {
   await page.goto("/?tour=italian-flat-v3&test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
 
   const indicator = page
     .getByRole("navigation", { name: "Tour points" })
@@ -128,10 +129,11 @@ test("keeps the guided-story card and actions inside a phone viewport", async ({
 test("keeps the tour controls usable on a phone viewport", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/?tour=italian-flat&test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   const viewBeforeNavigation = await page.evaluate(() =>
     window.__MESHTOUR_TEST_ENGINE__!.getView(),
   );
@@ -151,7 +153,9 @@ test("keeps the tour controls usable on a phone viewport", async ({ page }) => {
   expect(planBox!.x + planBox!.width).toBeLessThanOrEqual(viewportWidth);
   expect(spatialBox!.x + spatialBox!.width).toBeLessThanOrEqual(viewportWidth);
   for (const point of ["Kitchen & Dining", "Living Room", "Library Lounge"]) {
-    const button = page.getByRole("button", { name: point });
+    const button = page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: point });
     await expect(button).toBeVisible();
     const box = await button.boundingBox();
     expect(box).not.toBeNull();
@@ -159,12 +163,15 @@ test("keeps the tour controls usable on a phone viewport", async ({ page }) => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth);
   }
 
-  await page.getByRole("button", { name: "Library Lounge" }).click();
-  await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
-    "aria-current",
-    "location",
-    { timeout: 45_000 },
-  );
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Library Lounge" }),
+  ).toHaveAttribute("aria-current", "location", { timeout: 45_000 });
   const viewAfterNavigation = await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getView());
   expect(viewAfterNavigation.yaw).toBeCloseTo(viewBeforeNavigation.yaw, 4);
   expect(viewAfterNavigation.pitch).toBeCloseTo(viewBeforeNavigation.pitch, 4);

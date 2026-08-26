@@ -51,10 +51,11 @@ test("becomes interactive within two seconds on emulated fast 4G", async ({
 test("keeps transitions above the frame-rate budget", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   await page.goto("/?tour=italian-flat&test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -95,11 +96,15 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
         requestAnimationFrame(sample);
       }),
   );
-  await page.getByRole("button", { name: "Library Lounge" }).click();
-  await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Library Lounge" }),
+  ).toHaveAttribute("aria-current", "location");
   const samples = await frameSamplesPromise;
   const preparationMs = await preparationPromise;
   const elapsed = samples.at(-1)! - samples[0]!;
@@ -135,11 +140,13 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
   // Exercise every configured edge in both directions after the measured run.
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const room of ["Living Room", "Kitchen & Dining", "Living Room", "Library Lounge"]) {
-    await page.getByRole("button", { name: room }).click();
-    await expect(page.getByRole("button", { name: room })).toHaveAttribute(
-      "aria-current",
-      "location",
-    );
+    await page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: room })
+      .click();
+    await expect(
+      page.getByRole("navigation", { name: "Tour points" }).getByRole("button", { name: room }),
+    ).toHaveAttribute("aria-current", "location");
   }
   const memoryAfter = await page.evaluate(() => ({
     textures: window.__MESHTOUR_TEST_ENGINE__!.getRenderer().info.memory.textures,

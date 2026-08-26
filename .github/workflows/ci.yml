@@ -22,6 +22,9 @@ jobs:
       - run: pnpm sizecheck
       - run: pnpm packages:verify
       - run: pnpm assets:verify
+      - run: pnpm assets:verify:v2
+      - run: pnpm assets:verify:v3
+      - run: pnpm assets:verify:v4
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:apps

@@ -29,11 +29,23 @@ The closest commercial analogue is Matterport, but MeshTour's primary workflow i
 | [`@meshtour/core`](packages/core)   | Framework-agnostic engine (three.js peer dependency) |
 | [`@meshtour/react`](packages/react) | `<Tour>` component + `useTour()` hook wrapping core  |
 
-## Quickstart (React)
+## Quickstart from source
 
-```bash
-npm install @meshtour/react @meshtour/core three
+Use Node.js 22 and pnpm 9.15.4. Run these commands from the repository root.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm --filter @meshtour/demo dev
 ```
+
+Open the URL printed by Vite to explore Italian Flat v4. To run the standalone
+property configurator, use `pnpm --filter @meshtour/property-configurator dev`.
+
+The demo imports the local workspace packages. See [Releasing](docs/RELEASING.md)
+for the npm publishing steps.
+
+## React example
 
 ```tsx
 import { Tour, TourGuidedControls } from "@meshtour/react";
@@ -52,7 +64,7 @@ export function Apartment() {
 }
 ```
 
-## Quickstart (vanilla JS)
+## Vanilla JS example
 
 ```ts
 import { TourEngine } from "@meshtour/core";
@@ -117,7 +129,7 @@ entire authoring workflow inspectable without changing source code.
 ```
 packages/core       @meshtour/core — the engine
 packages/react      @meshtour/react — React bindings
-apps/demo           production-asset React demo (pnpm --filter @meshtour/demo dev)
+apps/demo           Italian Flat React demo (pnpm --filter @meshtour/demo dev)
 apps/property-configurator  buyer-facing Italian Flat v4 configurator
 assets-pipeline     Blender export guide and reproducible reference scripts
 docs                CONFIG.md and friends
@@ -165,4 +177,5 @@ The staged engineering plan for eliminating the remaining walk artifacts is in
 
 ## License
 
-[MIT](LICENSE)
+MeshTour code is licensed under [MIT](LICENSE). The bundled scene and its
+derivatives carry [Italian Flat attribution](apps/demo/public/tours/italian-flat/ATTRIBUTION.md).

@@ -17,8 +17,8 @@
   "files": [
     {
       "path": "ATTRIBUTION.md",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "bytes": 476,
+      "sha256": "e251a0e521cccb415fa2a409044af2a9be45913759cc5dcca44df7ad58c13e5c"
     },
     {
       "path": "layers/chair/cognac-leather/living_4k.png",
@@ -142,8 +142,8 @@
     },
     {
       "path": "tour.json",
-      "bytes": 7121,
-      "sha256": "d4973eef5c2dd23392ca91eff511ed3126671cb985aa411b6039c2b64fd689a4"
+      "bytes": 10029,
+      "sha256": "4e61770a95c6c899cad6b9987e513356dc83777e7d01053ab0ae319cc4c2ab4a"
     }
   ]
 }

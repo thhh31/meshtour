@@ -131,9 +131,7 @@ function serializeGlb(json, binary) {
   while (Buffer.byteLength(jsonText) % 4 !== 0) jsonText += " ";
   const jsonChunk = Buffer.from(jsonText, "utf8");
   const binaryPadding = (4 - (binary.byteLength % 4)) % 4;
-  const binaryChunk = binaryPadding
-    ? Buffer.concat([binary, Buffer.alloc(binaryPadding)])
-    : binary;
+  const binaryChunk = binaryPadding ? Buffer.concat([binary, Buffer.alloc(binaryPadding)]) : binary;
   const header = Buffer.alloc(12);
   const jsonHeader = Buffer.alloc(8);
   const binaryHeader = Buffer.alloc(8);

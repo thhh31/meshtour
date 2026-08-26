@@ -5,12 +5,14 @@ import { fileURLToPath } from "node:url";
 import { validateConfig } from "../packages/core/dist/index.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const tourRoot = path.join(projectRoot, "apps/demo/public/tours/italian-flat");
+const toursRoot = path.join(projectRoot, "apps/demo/public/tours");
+const tourRoot = path.join(toursRoot, "italian-flat");
 
 async function listFiles(directory, prefix = "") {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
     const relative = path.posix.join(prefix, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await listFiles(path.join(directory, entry.name), relative)));
@@ -39,6 +41,13 @@ function parseGlbJson(contents, sourcePath) {
       .trimEnd(),
   );
 }
+
+const publicTours = ["italian-flat", "italian-flat-v2", "italian-flat-v3", "italian-flat-v4"];
+const availableTours = (await readdir(toursRoot)).filter((name) => name !== ".DS_Store").sort();
+assert(
+  JSON.stringify(availableTours) === JSON.stringify(publicTours),
+  "The public demo must contain only the four Italian Flat tours",
+);
 
 const manifest = JSON.parse(await readFile(path.join(tourRoot, "manifest.json"), "utf8"));
 const config = validateConfig(JSON.parse(await readFile(path.join(tourRoot, "tour.json"), "utf8")));

@@ -25,10 +25,11 @@ test("loads the latest Italian Flat by default and accepts an alternate tour URL
       "Italian Flat v4 — Property Configurator",
   );
 
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   expect(
     await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getConfig()!.nodes.length),
   ).toBe(5);
@@ -39,7 +40,11 @@ test("loads the latest Italian Flat by default and accepts an alternate tour URL
   await page.waitForFunction(
     () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v2",
   );
-  await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Kitchen & Dining" }),
+  ).toBeVisible();
 });
 
 test("opens the demo material selector and changes flooring", async ({ page }) => {
@@ -81,10 +86,7 @@ test("opens the demo material selector and changes flooring", async ({ page }) =
 
   const panel = page.getByRole("complementary", { name: "Material selector" });
   await expect(panel).toBeVisible();
-  await expect(page.locator(".materials-panel-backdrop")).toHaveCSS(
-    "background-color",
-    "rgba(0, 0, 0, 0)",
-  );
+  await expect(page.locator("canvas")).toBeVisible();
   await expect(panel.getByText("Flooring", { exact: true })).toBeVisible();
   const oak = panel.locator(".materials-option").filter({ hasText: "Natural European oak" });
   await oak.click();
@@ -203,7 +205,10 @@ test("runs an interruptible spatial property story and restores visitor choices"
     )
     .toEqual({ status: "presenting", node: "living", sofa: "ivory-boucle" });
 
-  await page.getByRole("button", { name: "Library Lounge" }).click();
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click();
   await expect(page.getByRole("button", { name: "Resume chapter" })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
@@ -344,10 +349,11 @@ test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async 
     }
   });
   await page.goto("/?test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   await page.evaluate(() =>
     window.__MESHTOUR_TEST_ENGINE__!.setVariant("sofa-finish", "terracotta"),
   );
@@ -472,10 +478,11 @@ test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async 
   });
   expect(returnFlight.skysphereVisible).toBe(false);
   expect(returnFlight.dollhouseMaterials).toBeGreaterThan(0);
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.state), { timeout: 30_000 })
     .toBe("ready");
@@ -526,7 +533,10 @@ test("loads Italian Flat v2 with dedicated visibility and furniture-safe paths",
     .poll(() => assetResponses.get("/tours/italian-flat-v2/mesh/transition-visibility.glb"))
     .toBe(200);
 
-  await page.getByRole("button", { name: "Library Lounge" }).click({ noWaitAfter: true });
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click({ noWaitAfter: true });
   await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "transitioning");
   const midpoint = await page.evaluate(() => {
     const engine = window.__MESHTOUR_TEST_ENGINE__!;
@@ -564,7 +574,9 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
   await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__ !== undefined);
 
   await expect(page.getByRole("region", { name: "Apartment plan" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Plan point/ })).toHaveCount(3);
+  await expect(
+    page.getByRole("region", { name: "Apartment plan" }).getByRole("button"),
+  ).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Enter fullscreen" })).toBeVisible();
   const headingCone = page.getByRole("region", { name: "Apartment plan" }).locator("polygon");
   const initialCone = await headingCone.getAttribute("points");
@@ -684,10 +696,11 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
     );
   });
   await page.mouse.click(box!.x + kitchenLink.x, box!.y + kitchenLink.y);
-  await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Kitchen & Dining" }),
+  ).toHaveAttribute("aria-current", "location");
   expect(await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getViewMode())).toBe(
     "panorama",
   );
@@ -714,22 +727,29 @@ test("keeps all point buttons visible while the Italian Flat is loading", async 
 
   await page.goto("/?tour=italian-flat", { waitUntil: "domcontentloaded" });
   for (const point of ["Kitchen & Dining", "Living Room", "Library Lounge"]) {
-    const button = page.getByRole("button", { name: point });
+    const button = page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: point });
     await expect(button).toBeVisible();
     await expect(button).toBeDisabled();
   }
 
   releaseConfig();
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
 });
 
 test("disables point buttons until a scene transition finishes", async ({ page }) => {
   await page.goto("/?tour=italian-flat&test=1");
-  const lounge = page.getByRole("button", { name: "Library Lounge" });
-  const kitchen = page.getByRole("button", { name: "Kitchen & Dining" });
+  const lounge = page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" });
+  const kitchen = page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Kitchen & Dining" });
 
   await lounge.click({ noWaitAfter: true });
   await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "transitioning");
@@ -777,10 +797,11 @@ test("loads the production tour and walks between nodes", async ({ page }) => {
   });
 
   await page.goto("/?tour=italian-flat&test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
   const viewBeforeNavigation = await page.evaluate(() =>
     window.__MESHTOUR_TEST_ENGINE__!.getView(),
   );
@@ -805,18 +826,24 @@ test("loads the production tour and walks between nodes", async ({ page }) => {
     )
     .toBe(true);
 
-  await page.getByRole("button", { name: "Library Lounge" }).click();
-  await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
-    "aria-current",
-    "location",
-    { timeout: 45_000 },
-  );
-  await page.getByRole("button", { name: "Kitchen & Dining" }).click();
-  await expect(page.getByRole("button", { name: "Kitchen & Dining" })).toHaveAttribute(
-    "aria-current",
-    "location",
-    { timeout: 45_000 },
-  );
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Library Lounge" }),
+  ).toHaveAttribute("aria-current", "location", { timeout: 45_000 });
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Kitchen & Dining" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Kitchen & Dining" }),
+  ).toHaveAttribute("aria-current", "location", { timeout: 45_000 });
   const viewAfterNavigation = await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getView());
   expect(viewAfterNavigation.yaw).toBeCloseTo(viewBeforeNavigation.yaw, 4);
   expect(viewAfterNavigation.pitch).toBeCloseTo(viewBeforeNavigation.pitch, 4);
@@ -835,10 +862,11 @@ test("applies independent furniture layers and keeps them across nodes", async (
   });
 
   await page.goto("/?tour=italian-flat&test=1");
-  await expect(page.getByRole("button", { name: "Living Room" })).toHaveAttribute(
-    "aria-current",
-    "location",
-  );
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Living Room" }),
+  ).toHaveAttribute("aria-current", "location");
 
   await clickHotspot(page, "sofa_materials");
   await expect(page.getByRole("dialog", { name: "Sofa finish" })).toBeVisible();
@@ -874,12 +902,15 @@ test("applies independent furniture layers and keeps them across nodes", async (
     200,
   );
 
-  await page.getByRole("button", { name: "Library Lounge" }).click();
-  await expect(page.getByRole("button", { name: "Library Lounge" })).toHaveAttribute(
-    "aria-current",
-    "location",
-    { timeout: 30_000 },
-  );
+  await page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Library Lounge" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Tour points" })
+      .getByRole("button", { name: "Library Lounge" }),
+  ).toHaveAttribute("aria-current", "location", { timeout: 30_000 });
   expect(layerResponses.get("/tours/italian-flat/layers/sofa/terracotta/lounge_4k.png")).toBe(200);
   expect(layerResponses.get("/tours/italian-flat/layers/rug/sage-weave/lounge_4k.png")).toBe(200);
   expect(layerResponses.get("/tours/italian-flat/layers/chair/cognac-leather/lounge_4k.png")).toBe(

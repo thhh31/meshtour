@@ -11,6 +11,7 @@ async function listFiles(directory, prefix = "") {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
     const relative = path.posix.join(prefix, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await listFiles(path.join(directory, entry.name), relative)));
@@ -44,8 +45,7 @@ manifest.configurableLayers = {
   renderedVariants: 8,
 };
 manifest.proxy = {
-  objects: 33,
-  polygons: 17388,
+  ...manifest.proxy,
   bytes: (await stat(path.join(tourRoot, "mesh/apartment.glb"))).size,
 };
 manifest.files = files;
