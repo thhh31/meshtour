@@ -1,13 +1,21 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function clickHotspot(page: Page, hotspotId: string) {
+  const invitation = page.getByRole("button", { name: "Dismiss guided tour invitation" });
+  if (await invitation.isVisible()) {
+    await invitation.click();
+    await expect(invitation).toBeHidden();
+  }
   const canvas = page.locator("canvas");
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
-  const hotspotScreen = await page.evaluate((id) => {
+  const hotspotScreen = await page.evaluate(async (id) => {
     const engine = window.__MESHTOUR_TEST_ENGINE__!;
     const hotspot = engine.getConfig()!.hotspots.find((entry) => entry.id === id)!;
     engine.lookAt(hotspot.position);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
     return engine.worldToScreen(hotspot.position);
   }, hotspotId);
   expect(hotspotScreen.visible).toBe(true);
