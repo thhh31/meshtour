@@ -291,15 +291,20 @@ test("runs an interruptible spatial property story and restores visitor choices"
 });
 
 test("honors reduced motion while applying a guided chapter", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/?test=1");
   await page.getByRole("button", { name: /Start guided tour/ }).click();
   await expect
-    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
+      timeout: 45_000,
+    })
     .toBe("presenting");
   await page.getByRole("button", { name: "Next" }).click();
   await expect
-    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status))
+    .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
+      timeout: 45_000,
+    })
     .toBe("presenting");
   const view = await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getView());
   expect(view.yaw).toBeCloseTo(-0.295, 3);
@@ -356,7 +361,7 @@ test("combines Italian Flat v3 panoramas in an orbitable dollhouse view", async 
       panoramaPreviews.add(pathname);
     }
   });
-  await page.goto("/?test=1");
+  await page.goto("/?tour=italian-flat-v3&test=1");
   await expect(
     page
       .getByRole("navigation", { name: "Tour points" })

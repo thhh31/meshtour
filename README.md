@@ -6,6 +6,8 @@
 
 ![MeshTour transition between viewpoints](docs/media/transition-poster.png)
 
+[Explore the live Italian Flat tour](https://thhh31.github.io/meshtour-public/)
+
 [Watch the 14-second walking-transition demo](docs/media/meshtour-transition.webm)
 
 ## Why a mesh behind the image?
