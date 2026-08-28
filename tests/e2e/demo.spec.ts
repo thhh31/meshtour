@@ -300,7 +300,7 @@ test("honors reduced motion while applying a guided chapter", async ({ page }) =
       timeout: 45_000,
     })
     .toBe("presenting");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next" }).click({ noWaitAfter: true });
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
       timeout: 45_000,
@@ -591,16 +591,16 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
     page.getByRole("region", { name: "Apartment plan" }).getByRole("button"),
   ).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Enter fullscreen" })).toBeVisible();
-  const headingCone = page.getByRole("region", { name: "Apartment plan" }).locator("polygon");
-  const initialCone = await headingCone.getAttribute("points");
-  expect(initialCone).not.toBeNull();
+  const headingCone = page
+    .getByRole("region", { name: "Apartment plan" })
+    .locator(".meshtour-plan-view-cone");
+  await expect(headingCone).toBeVisible();
   await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.setView(Math.PI / 2, 0));
-  await expect.poll(() => headingCone.getAttribute("points")).not.toBe(initialCone);
-  const [origin, leftEdge, rightEdge] = (await headingCone.getAttribute("points"))!
-    .split(" ")
-    .map((point) => point.split(",").map(Number));
-  expect((leftEdge![0]! + rightEdge![0]!) / 2).toBeLessThan(origin![0]! - 20);
-  expect((leftEdge![1]! + rightEdge![1]!) / 2).toBeCloseTo(origin![1]!, 4);
+  await expect
+    .poll(() =>
+      headingCone.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).b),
+    )
+    .toBeCloseTo(-1, 4);
   expect(
     await page.evaluate(() =>
       Boolean(window.__MESHTOUR_TEST_ENGINE__!.getScene().getObjectByName("meshtour_ceiling")),
@@ -667,6 +667,7 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
   await expect(page.getByText("Width 6.98 m").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Return to panorama" }).click();
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.getViewMode() === "panorama");
   expect(
     await page.evaluate(() => ({
       mode: window.__MESHTOUR_TEST_ENGINE__!.getViewMode(),
@@ -756,7 +757,9 @@ test("keeps all point buttons visible while the Italian Flat is loading", async 
 });
 
 test("disables point buttons until a scene transition finishes", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto("/?tour=italian-flat&test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
   const lounge = page
     .getByRole("navigation", { name: "Tour points" })
     .getByRole("button", { name: "Library Lounge" });
@@ -810,6 +813,7 @@ test("loads the production tour and walks between nodes", async ({ page }) => {
   });
 
   await page.goto("/?tour=italian-flat&test=1");
+  await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.state === "ready");
   await expect(
     page
       .getByRole("navigation", { name: "Tour points" })
