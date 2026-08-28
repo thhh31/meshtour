@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "Framework-agnostic engine for mesh-backed photorealistic virtual tours: equirectangular panoramas projected onto an invisible proxy mesh, with parallax-correct walking transitions, object-aware interaction, and occlusion-aware hotspots.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thhh31/meshtour-public.git",
+    "directory": "packages/core"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
