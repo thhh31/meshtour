@@ -31,6 +31,18 @@ The closest commercial analogue is Matterport, but MeshTour's primary workflow i
 | [`@meshtour/core`](packages/core)   | Framework-agnostic engine (three.js peer dependency) |
 | [`@meshtour/react`](packages/react) | `<Tour>` component + `useTour()` hook wrapping core  |
 
+## Install from npm
+
+```sh
+npm install @meshtour/core three
+```
+
+For React apps, install the React bindings alongside Core.
+
+```sh
+npm install @meshtour/react @meshtour/core three
+```
+
 ## Quickstart from source
 
 Use Node.js 22 and pnpm 9.15.4. Run these commands from the repository root.
