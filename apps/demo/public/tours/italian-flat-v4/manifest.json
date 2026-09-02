@@ -6,8 +6,8 @@
   "files": [
     {
       "path": "ATTRIBUTION.md",
-      "bytes": 778,
-      "sha256": "c4e631bf9fe04a9d4d006200cf88e565d7e2c8b0f7397da40cea9f25f73d2802"
+      "bytes": 666,
+      "sha256": "e6e87059dd6a5b0b89f84cb6a4cbab8df5cd93dc25f6d23ef1e957dc0b1af8ea"
     },
     {
       "path": "layers/chair/cognac-leather/kitchen-window_4k.png",
@@ -141,8 +141,8 @@
     },
     {
       "path": "materials/README.md",
-      "bytes": 1045,
-      "sha256": "79a732151b8dfeb39626d8919754cfe547c173ed7a7edac24b0e95ed0022f366"
+      "bytes": 206,
+      "sha256": "8f2d65b2ff4666b38fadc28aa9315a3091a809e03b764ee02a83c10e267dbec2"
     },
     {
       "path": "materials/light-travertine-basecolor.png",
@@ -186,8 +186,8 @@
     },
     {
       "path": "tour.json",
-      "bytes": 21419,
-      "sha256": "e72052194398d56fa15cafa47e6068efabb99dc584a35424cb2dba544c115826"
+      "bytes": 20913,
+      "sha256": "5628d3c2d6c4ad5cc4afaecd3286d9789d0b0828ca32574359cc899a32c2e70e"
     }
   ]
 }

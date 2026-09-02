@@ -202,8 +202,8 @@
   "guides": [
     {
       "id": "property-highlights",
-      "title": "A considered Italian home",
-      "description": "Follow the spatial story, then step away at any point to inspect the apartment for yourself.",
+      "title": "Italian Flat tour",
+      "description": "See the layout, walk through the rooms, and try different finishes.",
       "autoplay": {
         "stepDurationMs": 8000
       },
@@ -215,8 +215,8 @@
       "steps": [
         {
           "id": "connected-layout",
-          "title": "One connected living sequence",
-          "body": "The kitchen, dining room, living area and library read as distinct places while remaining visually connected from end to end.",
+          "title": "Apartment layout",
+          "body": "The overhead view shows how the kitchen, living room, and library connect.",
           "view": {
             "mode": "dollhouse",
             "node": "living",
@@ -228,8 +228,8 @@
         },
         {
           "id": "flexible-living",
-          "title": "A living room you can make your own",
-          "body": "The central lounge keeps generous circulation around a full sofa group. This chapter previews a lighter bouclé finish without changing the underlying architecture.",
+          "title": "Living room finishes",
+          "body": "This view shows the ivory bouclé sofa and the sage rug.",
           "view": {
             "mode": "panorama",
             "node": "living",
@@ -244,8 +244,8 @@
         },
         {
           "id": "kitchen-arrival",
-          "title": "Kitchen and dining share the daylight",
-          "body": "A direct walking transition makes the relationship between preparation, dining and the main living room immediately understandable.",
+          "title": "Kitchen and dining",
+          "body": "Walk from the living room to the dining table beside the kitchen.",
           "view": {
             "mode": "panorama",
             "node": "kitchen",
@@ -256,8 +256,8 @@
         },
         {
           "id": "measured-plan",
-          "title": "Verify the footprint, not just the mood",
-          "body": "The measured top view returns the experience to real dimensions, helping buyers compare furniture, circulation and usable floor area with confidence.",
+          "title": "Floor plan and dimensions",
+          "body": "The floor plan shows room and furniture dimensions.",
           "view": {
             "mode": "top",
             "center": [3.49, -4.9495],
@@ -267,8 +267,8 @@
         },
         {
           "id": "library-retreat",
-          "title": "A quieter room at the far end",
-          "body": "The library lounge completes the journey with a more private place to read, work or host a smaller conversation.",
+          "title": "Library lounge",
+          "body": "The library lounge is at the far end of the apartment.",
           "view": {
             "mode": "panorama",
             "node": "lounge",

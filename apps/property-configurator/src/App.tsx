@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ConfiguratorPanel } from "./ConfiguratorPanel";
 import { track } from "./analytics";
 
-const TOUR_CONFIG = "./tours/italian-flat-v4/tour.json?v=2";
+const TOUR_CONFIG = "./tours/italian-flat-v4/tour.json?v=3";
 const ENGINE_OPTIONS = {
   dracoDecoderPath: "./vendor/draco/",
   ktx2TranscoderPath: "./vendor/basis/",
@@ -39,11 +39,10 @@ function LoadingExperience() {
     <div className="loading-experience" role="status" aria-live="polite">
       <span className="brand-mark">CF</span>
       <p className="eyebrow">Casa Forma · Milano</p>
-      <h1>Preparing your residence</h1>
+      <h1>Loading Italian Flat…</h1>
       <div className="loading-line">
         <span />
       </div>
-      <small>Loading spatial model and finish catalogue</small>
     </div>
   );
 }
@@ -80,8 +79,7 @@ export function App() {
         fallback={<LoadingExperience />}
         errorFallback={(error) => (
           <div className="error-experience" role="alert">
-            <p className="eyebrow">Unable to open residence</p>
-            <h1>The spatial experience could not be loaded.</h1>
+            <h1>Could not load the tour</h1>
             <pre>{error.message}</pre>
           </div>
         )}

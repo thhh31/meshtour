@@ -107,7 +107,7 @@ source.configurator = {
     {
       id: "flooring",
       label: "Flooring",
-      description: "A permanent finish across the connected living level.",
+      description: "Flooring throughout the apartment.",
       room: "Whole home",
       default: "original",
       options: [
@@ -261,14 +261,14 @@ source.configurator = {
     {
       id: "developer-standard",
       label: "Developer Standard",
-      description: "The included specification.",
+      description: "The standard finishes.",
       badge: "Included",
       selections: {},
     },
     {
       id: "warm-contemporary",
       label: "Warm Contemporary",
-      description: "Oak and grounded earth tones.",
+      description: "Oak flooring and warm upholstery.",
       badge: "Most popular",
       selections: {
         flooring: "natural-oak",
@@ -280,7 +280,7 @@ source.configurator = {
     {
       id: "natural-light",
       label: "Natural Light",
-      description: "Travertine and tactile pale textiles.",
+      description: "Travertine flooring and light upholstery.",
       selections: {
         flooring: "light-travertine",
         sofa: "ivory-boucle",

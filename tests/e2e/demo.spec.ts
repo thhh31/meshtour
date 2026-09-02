@@ -176,7 +176,7 @@ test("runs an interruptible spatial property story and restores visitor choices"
   const start = page.getByRole("button", { name: /Start guided tour/ });
   await expect(start).toBeVisible();
   await start.click();
-  await expect(page.getByText("One connected living sequence")).toBeVisible();
+  await expect(page.getByText("Apartment layout")).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getGuideState().status), {
       timeout: 45_000,
@@ -200,7 +200,7 @@ test("runs an interruptible spatial property story and restores visitor choices"
   });
 
   await page.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByText("A living room you can make your own")).toBeVisible();
+  await expect(page.getByText("Living room finishes")).toBeVisible();
   await expect
     .poll(
       () =>
@@ -234,7 +234,7 @@ test("runs an interruptible spatial property story and restores visitor choices"
     .toBe("living");
 
   await page.getByRole("button", { name: /Go to chapter 4:/ }).click();
-  await expect(page.getByText("Verify the footprint, not just the mood")).toBeVisible();
+  await expect(page.getByText("Floor plan and dimensions")).toBeVisible();
   await expect
     .poll(
       () =>

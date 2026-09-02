@@ -10,7 +10,6 @@ const DEMO_TOURS = {
   "italian-flat": {
     loadingLabel: "Italian Flat",
     config: "./tours/italian-flat/tour.json?v=23",
-    loadingDetail: "Fast preview first, high-quality 4K detail next",
     points: [
       { id: "kitchen", name: "Kitchen & Dining" },
       { id: "living", name: "Living Room" },
@@ -20,7 +19,6 @@ const DEMO_TOURS = {
   "italian-flat-v2": {
     loadingLabel: "Italian Flat v2",
     config: "./tours/italian-flat-v2/tour.json?v=1",
-    loadingDetail: "Authored walk paths with dedicated transition visibility",
     points: [
       { id: "kitchen", name: "Kitchen & Dining" },
       { id: "living", name: "Living Room" },
@@ -29,8 +27,7 @@ const DEMO_TOURS = {
   },
   "italian-flat-v3": {
     loadingLabel: "Italian Flat v3",
-    config: "./tours/italian-flat-v3/tour.json?v=1",
-    loadingDetail: "Covered windows and doors proxy geometry",
+    config: "./tours/italian-flat-v3/tour.json?v=2",
     points: [
       { id: "kitchen", name: "Kitchen & Dining" },
       { id: "living", name: "Living Room" },
@@ -39,8 +36,7 @@ const DEMO_TOURS = {
   },
   "italian-flat-v4": {
     loadingLabel: "Italian Flat v4",
-    config: "./tours/italian-flat-v4/tour.json?v=6",
-    loadingDetail: "A connected residence with interactive material finishes",
+    config: "./tours/italian-flat-v4/tour.json?v=7",
     points: [
       { id: "kitchen", name: "Kitchen & Dining" },
       { id: "kitchen-window", name: "Kitchen Window" },
@@ -217,20 +213,7 @@ export function App() {
               letterSpacing: "0.04em",
             }}
           >
-            Loading the {activeTour.loadingLabel}…
-          </div>
-          <div
-            style={{
-              maxWidth: 320,
-              textAlign: "center",
-              fontSize: 12,
-              color: "rgba(255, 255, 255, 0.42)",
-              fontWeight: 300,
-              letterSpacing: "0.02em",
-              lineHeight: 1.6,
-            }}
-          >
-            {activeTour.loadingDetail}
+            Loading {activeTour.loadingLabel}…
           </div>
         </div>
       }

@@ -10,6 +10,5 @@ Blender and marked CC-BY in the source `.blend` file.
   and travertine texture sources; 2K transparent Cycles layers rendered from
   the five audited panorama cameras.
 
-The new texture source images were generated for this MeshTour demo with the
-built-in OpenAI image-generation tool, then consumed as Blender material input.
-They contain no logos or third-party brand marks.
+The oak and travertine textures were AI-generated for this demo and used as
+inputs in Blender.
