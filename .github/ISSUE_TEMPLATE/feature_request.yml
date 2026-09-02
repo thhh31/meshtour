@@ -1,43 +1,15 @@
 name: Feature request
-description: Propose a focused addition to MeshTour
-title: "[Feature]: "
+description: Suggest a change to MeshTour
 labels: [enhancement]
 body:
   - type: textarea
-    id: problem
+    id: use_case
     attributes:
-      label: Problem
-      description: What author or viewer problem would this solve?
+      label: What are you trying to do?
+      description: Describe where the current viewer or API gets in the way.
     validations:
       required: true
   - type: textarea
-    id: proposal
+    id: suggestion
     attributes:
-      label: Proposed solution
-      description: Describe the smallest public API or behavior change that would solve it.
-    validations:
-      required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Area
-      options:
-        - Core engine
-        - React bindings
-        - Config schema
-        - Author mode
-        - Asset pipeline
-        - Demo or documentation
-    validations:
-      required: true
-  - type: checkboxes
-    id: contract
-    attributes:
-      label: Config compatibility
-      options:
-        - label: I understand config schema v1 is append-only.
-          required: true
+      label: Suggested change

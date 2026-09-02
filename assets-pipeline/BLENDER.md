@@ -1,6 +1,7 @@
-# Blender same-source export workflow
+# Export a tour from Blender
 
-This guide turns one Blender scene into a complete MeshTour asset set: equirectangular panoramas + an aligned low-poly proxy mesh + a `tour.json`. Because both come from the same model, alignment is exact — no calibration step.
+Render panoramas and export a simplified mesh from the same Blender scene.
+Use the camera positions from that scene in `tour.json`.
 
 Folder convention (matches the config defaults):
 
@@ -78,7 +79,8 @@ independently with `--mode top --top-width 2048`.
 
 ## 3. Image optimization
 
-Two files per panorama: a small JPEG preview (first paint < 2 s on 4G) and a GPU-compressed KTX2 full version (KTX2 stays compressed in GPU memory — this is what keeps 8k panoramas alive on mobile).
+Use a small JPEG for the first view and a KTX2 texture for full resolution.
+KTX2 can keep the full image compressed in GPU memory.
 
 ```bash
 # Preview: 1024-wide JPEG (~150 KB)

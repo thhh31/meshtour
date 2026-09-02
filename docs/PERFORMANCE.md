@@ -34,7 +34,5 @@ preview, Draco proxy, and self-hosted Draco decoder. Critical files are
 preloaded by the demo and the engine loads the proxy and first panorama in
 parallel.
 
-These measurements are reproducible development evidence, not a substitute
-for release sign-off on physical devices. Before launch, test current Android
-Chrome on a real mid-range phone over a representative mobile connection,
-record first-interactive time and transition fps here, and check iOS Safari.
+The Pixel 5 profile used browser emulation. The transition measurement used
+the desktop GPU.

@@ -1,8 +1,8 @@
 # MeshTour config format (v1)
 
-The tour config is the public contract of MeshTour: a single JSON document that fully describes a tour. It is validated with [zod](https://zod.dev) — the schema ships in `@meshtour/core` as `tourConfigSchema`, and `validateConfig(data)` returns a typed, defaults-applied `TourConfig` or throws a readable `ConfigError`.
-
-Design rule: the future visual editor's only job will be producing this file. Anything the editor needs must be expressible here.
+A tour config describes the mesh, panoramas, camera positions, links, and
+hotspots. `@meshtour/core` exports `tourConfigSchema` and `validateConfig(data)`, which fills in
+defaults and throws `ConfigError` for invalid input.
 
 ## Coordinate system
 

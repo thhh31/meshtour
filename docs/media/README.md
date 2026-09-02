@@ -1,9 +1,13 @@
-# Demo media attribution
+# Demo media
 
-`meshtour-transition.webm` and `transition-poster.png` show the bundled Italian
-Flat tour. The visual scene is **Italian Flat by Flavio Della Tommasa
-(malapixel.com)**, distributed as `CC-BY` in the source Blender file. These
-recorded/rendered derivatives retain that attribution requirement.
+`italian-flat.jpg` is a screenshot of the Italian Flat demo. See the
+[scene credits](../../apps/demo/public/tours/italian-flat-v4/ATTRIBUTION.md).
 
-Full source, checksum, and modification details are in
-`apps/demo/public/tours/italian-flat/ATTRIBUTION.md`.
+To record the current demo, start it locally and pass its URL to
+`pnpm demo:record`.
+
+```sh
+pnpm demo:record http://localhost:5173/
+```
+
+The recording is saved to `test-results/recording/italian-flat.webm`.

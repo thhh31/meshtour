@@ -1,65 +1,21 @@
 name: Bug report
-description: Report a reproducible MeshTour defect
-title: "[Bug]: "
+description: Report a problem with MeshTour
 labels: [bug]
 body:
-  - type: markdown
+  - type: textarea
+    id: reproduction
     attributes:
-      value: Thanks for helping improve MeshTour. Please remove private tour data before uploading a reproduction.
-  - type: input
-    id: version
-    attributes:
-      label: Package version
-      placeholder: "@meshtour/core 0.1.0, @meshtour/react 0.1.0"
+      label: What happened?
+      description: Include the expected behavior, steps, and a small reproduction if you have one.
     validations:
       required: true
   - type: input
     id: environment
     attributes:
-      label: Environment
-      placeholder: "Chrome 140, macOS 15, React 19"
-    validations:
-      required: true
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Minimal reproduction
-      description: Link a repository or provide the smallest config/code that reproduces the problem.
-    validations:
-      required: true
-  - type: textarea
-    id: steps
-    attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. Load ...
-        2. Select ...
-        3. Observe ...
-    validations:
-      required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual behavior
-    validations:
-      required: true
+      label: Versions and environment
+      description: Include MeshTour, Three.js, browser, OS, and GPU if relevant.
   - type: textarea
     id: media
     attributes:
       label: Screenshots, video, or logs
-      description: For transition artifacts, include the two node positions and whether the affected geometry is visible from both viewpoints.
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: Checks
-      options:
-        - label: I searched existing issues for this problem.
-          required: true
-        - label: I read the known rendering artifacts in the README.
-          required: true
+      description: For a transition bug, include the two viewpoints. Remove any private tour data.
