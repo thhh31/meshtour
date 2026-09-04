@@ -2,16 +2,17 @@ import { defineConfig, devices } from "@playwright/test";
 
 const previewPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 const previewUrl = `http://127.0.0.1:${previewPort}`;
+const ci = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
-  forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  forbidOnly: ci,
+  retries: ci ? 1 : 0,
   // Browser/GPU performance assertions are meaningful only without competing
   // workers sharing the same headless renderer.
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  reporter: ci ? "github" : "list",
   snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{projectName}/{arg}{ext}",
   expect: {
     timeout: 10_000,
@@ -28,12 +29,21 @@ export default defineConfig({
   projects: [
     {
       name: "desktop-chromium",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 720 },
+        // GitHub's Linux runners rasterize WebGL on the CPU. Keep the same
+        // layout and input coordinates while reducing the canvas pixel count.
+        deviceScaleFactor: ci ? 0.5 : 1,
+      },
       testMatch: /(?:demo|performance|transition-quality)\.spec\.ts/,
     },
     {
       name: "mobile-chromium",
-      use: { ...devices["Pixel 5"] },
+      use: {
+        ...devices["Pixel 5"],
+        deviceScaleFactor: ci ? 1 : devices["Pixel 5"].deviceScaleFactor,
+      },
       testMatch: /(?:mobile|performance|transition-quality)\.spec\.ts/,
     },
     {
@@ -55,7 +65,7 @@ export default defineConfig({
   webServer: {
     command: `pnpm build && pnpm --filter @meshtour/demo build && pnpm --filter @meshtour/demo preview --host 127.0.0.1 --port ${previewPort}`,
     url: previewUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !ci,
     timeout: 120_000,
   },
 });
