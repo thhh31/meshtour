@@ -12,7 +12,7 @@ export default defineConfig({
   // Browser/GPU performance assertions are meaningful only without competing
   // workers sharing the same headless renderer.
   workers: 1,
-  reporter: ci ? "github" : "list",
+  reporter: ci ? [["github"], ["list"]] : "list",
   snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{projectName}/{arg}{ext}",
   expect: {
     timeout: 10_000,
@@ -31,6 +31,7 @@ export default defineConfig({
       name: "desktop-chromium",
       use: {
         ...devices["Desktop Chrome"],
+        channel: ci ? "chromium" : undefined,
         viewport: { width: 1280, height: 720 },
         // GitHub's Linux runners rasterize WebGL on the CPU. Keep the same
         // layout and input coordinates while reducing the canvas pixel count.
@@ -42,6 +43,7 @@ export default defineConfig({
       name: "mobile-chromium",
       use: {
         ...devices["Pixel 5"],
+        channel: ci ? "chromium" : undefined,
         deviceScaleFactor: ci ? 1 : devices["Pixel 5"].deviceScaleFactor,
       },
       testMatch: /(?:mobile|performance|transition-quality)\.spec\.ts/,

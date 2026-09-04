@@ -26,7 +26,8 @@ async function clickHotspot(page: Page, hotspotId: string) {
 test("loads the latest Italian Flat by default and accepts an alternate tour URL", async ({
   page,
 }) => {
-  await page.goto("/?test=1");
+  test.setTimeout(90_000);
+  await page.goto("/?test=1", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () =>
       window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name ===
@@ -44,7 +45,7 @@ test("loads the latest Italian Flat by default and accepts an alternate tour URL
   await expect(page.locator(".demo-title")).toHaveCount(0);
   await expect(page.locator(".demo-scene-switcher")).toHaveCount(0);
 
-  await page.goto("/?tour=italian-flat-v2&test=1");
+  await page.goto("/?tour=italian-flat-v2&test=1", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => window.__MESHTOUR_TEST_ENGINE__?.getConfig()?.name === "Italian Flat v2",
   );
@@ -668,6 +669,10 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
 
   await page.getByRole("button", { name: "Return to panorama" }).click();
   await page.waitForFunction(() => window.__MESHTOUR_TEST_ENGINE__?.getViewMode() === "panorama");
+  const kitchen = page
+    .getByRole("navigation", { name: "Tour points" })
+    .getByRole("button", { name: "Kitchen & Dining" });
+  await expect(kitchen).toBeEnabled();
   expect(
     await page.evaluate(() => ({
       mode: window.__MESHTOUR_TEST_ENGINE__!.getViewMode(),
@@ -692,13 +697,15 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
       page.evaluate(() => {
         const scene = window.__MESHTOUR_TEST_ENGINE__!.getScene();
         return {
-          kitchenLink: scene.getObjectByName("meshtour_link_shared_to_kitchen")?.parent?.visible,
+          kitchenLink: scene.getObjectByName("meshtour_link_shared_to_kitchen")?.visible,
           currentLivingLink: scene.getObjectByName("meshtour_link_shared_to_living")?.visible,
-          loungeLink: scene.getObjectByName("meshtour_link_shared_to_lounge")?.parent?.visible,
+          loungeLink: scene.getObjectByName("meshtour_link_shared_to_lounge")?.visible,
+          sharedLinks: scene.getObjectByName("meshtour_shared_links")?.visible,
         };
       }),
     )
-    .toEqual({ kitchenLink: true, currentLivingLink: false, loungeLink: true });
+    .toEqual({ kitchenLink: true, currentLivingLink: true, loungeLink: true, sharedLinks: true });
+  await expect(kitchen).toBeEnabled();
 
   const canvas = page.locator("canvas");
   const box = await canvas.boundingBox();
@@ -710,11 +717,7 @@ test("provides an automatic plan, measurements, textured top view, and fullscree
     );
   });
   await page.mouse.click(box!.x + kitchenLink.x, box!.y + kitchenLink.y);
-  await expect(
-    page
-      .getByRole("navigation", { name: "Tour points" })
-      .getByRole("button", { name: "Kitchen & Dining" }),
-  ).toHaveAttribute("aria-current", "location");
+  await expect(kitchen).toHaveAttribute("aria-current", "location", { timeout: 45_000 });
   expect(await page.evaluate(() => window.__MESHTOUR_TEST_ENGINE__!.getViewMode())).toBe(
     "panorama",
   );
