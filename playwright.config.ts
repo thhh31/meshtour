@@ -3,6 +3,10 @@ import { defineConfig, devices } from "@playwright/test";
 const previewPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 const previewUrl = `http://127.0.0.1:${previewPort}`;
 const ci = Boolean(process.env.CI);
+const useMesa = ci && process.platform === "linux" && Boolean(process.env.DISPLAY);
+const chromiumLaunchOptions = useMesa
+  ? { args: ["--ozone-platform=x11", "--use-gl=angle", "--use-angle=gl"] }
+  : undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -32,6 +36,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         channel: ci ? "chromium" : undefined,
+        launchOptions: chromiumLaunchOptions,
         viewport: { width: 1280, height: 720 },
         // GitHub's Linux runners rasterize WebGL on the CPU. Keep the same
         // layout and input coordinates while reducing the canvas pixel count.
@@ -44,6 +49,7 @@ export default defineConfig({
       use: {
         ...devices["Pixel 5"],
         channel: ci ? "chromium" : undefined,
+        launchOptions: chromiumLaunchOptions,
         deviceScaleFactor: ci ? 1 : devices["Pixel 5"].deviceScaleFactor,
       },
       testMatch: /(?:mobile|performance|transition-quality)\.spec\.ts/,
