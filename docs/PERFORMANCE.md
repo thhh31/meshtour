@@ -20,19 +20,23 @@ software-renderer results and traverses all configured links, but enforces the
 55 fps desktop / 30 fps phone-viewport thresholds only when WebGL reports a
 hardware renderer.
 
-## Current reference results
+CI limits the data downloaded before the Italian Flat demo becomes
+interactive to 1 MiB, about two seconds of transfer at the emulated 4 Mbps.
+It also records startup time, which includes parsing, decoding, and rendering
+on the machine running the test. Compare startup times on the same hardware.
+
+## Earlier reference results
 
 Measured on 2026-08-17 from a production Vite preview:
 
-| Check             | Profile                                                             |                      Result |              Budget |
-| ----------------- | ------------------------------------------------------------------- | --------------------------: | ------------------: |
-| First interactive | Pixel 5 viewport, cold cache, 4 Mbps down, 3 Mbps up, 40 ms latency |                    1,596 ms |          < 2,000 ms |
-| Transition        | 1280×720 headed Chromium, Apple M4 / ANGLE Metal                    | 60.0 fps, 18.6 ms p95 frame | ≥55 fps, ≤35 ms p95 |
+| Check             | Profile                                                             |                      Result |                    Budget |
+| ----------------- | ------------------------------------------------------------------- | --------------------------: | ------------------------: |
+| First interactive | Pixel 5 viewport, cold cache, 4 Mbps down, 3 Mbps up, 40 ms latency |                    1,596 ms | 2 s on reference hardware |
+| Transition        | 1280×720 headed Chromium, Apple M4 / ANGLE Metal                    | 60.0 fps, 18.6 ms p95 frame |       ≥55 fps, ≤35 ms p95 |
 
 The cold-start profile includes the application JavaScript, config, JPEG
-preview, Draco proxy, and self-hosted Draco decoder. Critical files are
-preloaded by the demo and the engine loads the proxy and first panorama in
-parallel.
+preview, Draco proxy, and Draco decoder. The engine loads the proxy and first
+panorama in parallel.
 
 The Pixel 5 profile used browser emulation. The transition measurement used
 the desktop GPU.

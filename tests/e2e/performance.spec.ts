@@ -7,7 +7,7 @@ const FAST_4G = {
   uploadThroughput: (3 * 1024 * 1024) / 8,
 };
 
-test("becomes interactive within two seconds on emulated fast 4G", async ({
+test("keeps the Italian Flat cold start within the transfer budget", async ({
   page,
   context,
 }, testInfo) => {
@@ -23,29 +23,38 @@ test("becomes interactive within two seconds on emulated fast 4G", async ({
   const interactiveMs = await page.evaluate(
     () => performance.getEntriesByName("meshtour-ready")[0]!.startTime,
   );
-  const resources = await page.evaluate(() =>
-    performance
-      .getEntriesByType("resource")
-      .map((entry) => {
-        const timing = entry as PerformanceResourceTiming;
-        return {
-          path: new URL(entry.name).pathname,
-          startTime: entry.startTime,
-          duration: entry.duration,
-          transferSize: timing.transferSize,
-          encodedBodySize: timing.encodedBodySize,
-        };
-      })
-      .sort((a, b) => a.startTime - b.startTime),
+  const resources = await page.evaluate((readyAt) => {
+    const entries = [
+      ...performance.getEntriesByType("navigation"),
+      ...performance.getEntriesByType("resource"),
+    ] as PerformanceResourceTiming[];
+    return entries
+      .filter(
+        (entry) => new URL(entry.name).origin === location.origin && entry.responseEnd <= readyAt,
+      )
+      .map((entry) => ({
+        path: new URL(entry.name).pathname,
+        startTime: entry.startTime,
+        duration: entry.duration,
+        transferSize: entry.transferSize,
+      }))
+      .sort((a, b) => a.startTime - b.startTime);
+  }, interactiveMs);
+  const transferSize = resources.reduce((total, resource) => total + resource.transferSize, 0);
+  console.log(
+    `Italian Flat interactive in ${interactiveMs.toFixed(0)} ms after ${(transferSize / 1024).toFixed(0)} KiB on emulated fast 4G`,
   );
-  console.log(`mobile-chromium: interactive in ${interactiveMs.toFixed(0)} ms on emulated fast 4G`);
   console.log(JSON.stringify(resources, null, 2));
 
   await testInfo.attach("cold-start.json", {
-    body: JSON.stringify({ profile: FAST_4G, interactiveMs, resources }, null, 2),
+    body: JSON.stringify({ profile: FAST_4G, interactiveMs, transferSize, resources }, null, 2),
     contentType: "application/json",
   });
-  expect(interactiveMs).toBeLessThan(2_000);
+  expect(
+    resources.find(({ path }) => path.endsWith("/pano/living_1k.jpg"))?.transferSize,
+  ).toBeGreaterThan(0);
+  expect(resources.find(({ path }) => path.endsWith(".glb"))?.transferSize).toBeGreaterThan(0);
+  expect(transferSize).toBeLessThan(FAST_4G.downloadThroughput * 2);
 });
 
 test("keeps transitions above the frame-rate budget", async ({ page }, testInfo) => {
