@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const previewPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 const previewUrl = `http://127.0.0.1:${previewPort}`;
 const ci = Boolean(process.env.CI);
+const desktopViewport = { width: 1280, height: 720 };
+const desktopScale = ci ? 0.5 : 1;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -32,9 +34,9 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         channel: ci ? "chromium" : undefined,
-        viewport: { width: 1280, height: 720 },
+        viewport: desktopViewport,
         // Keep the same layout while reducing the render load on hosted runners.
-        deviceScaleFactor: ci ? 0.5 : 1,
+        deviceScaleFactor: desktopScale,
       },
       testMatch: /(?:demo|performance|transition-quality)\.spec\.ts/,
     },
@@ -49,12 +51,16 @@ export default defineConfig({
     },
     {
       name: "desktop-firefox",
-      use: { ...devices["Desktop Firefox"], viewport: { width: 1280, height: 720 } },
+      use: {
+        ...devices["Desktop Firefox"],
+        viewport: desktopViewport,
+        deviceScaleFactor: desktopScale,
+      },
       testMatch: /compatibility\.spec\.ts/,
     },
     {
       name: "desktop-webkit",
-      use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 720 } },
+      use: { ...devices["Desktop Safari"], viewport: desktopViewport },
       testMatch: /compatibility\.spec\.ts/,
     },
     {
