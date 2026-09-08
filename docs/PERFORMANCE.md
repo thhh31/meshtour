@@ -13,12 +13,10 @@ Run the hardware check with:
 pnpm test:performance
 ```
 
-A headed browser is intentional. Headless Chromium normally reports a
-SwiftShader software renderer in CI; CPU rasterization is useful for functional
-regression testing but cannot represent device GPU frame rate. The test records
-software-renderer results and traverses all configured links, but enforces the
-55 fps desktop / 30 fps phone-viewport thresholds only when WebGL reports a
-hardware renderer.
+A headed browser is intentional. CI uses the hosted macOS browser runner for
+WebGL. The test records frame times and traverses all configured links on
+software and virtual GPUs. It enforces the 55 fps desktop and 30 fps phone
+viewport thresholds on physical GPUs.
 
 CI limits the data downloaded before the Italian Flat demo becomes
 interactive to 1 MiB, about two seconds of transfer at the emulated 4 Mbps.

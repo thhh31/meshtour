@@ -134,11 +134,11 @@ test("keeps transitions above the frame-rate budget", async ({ page }, testInfo)
     `${testInfo.project.name}: ${fps.toFixed(1)} fps, p95 ${p95FrameMs.toFixed(1)} ms, ${renderer}`,
   );
 
-  const softwareRenderer = /swiftshader|llvmpipe|software/i.test(renderer);
-  if (softwareRenderer) {
+  const sharedRenderer = /swiftshader|llvmpipe|software|paravirtual/i.test(renderer);
+  if (sharedRenderer) {
     testInfo.annotations.push({
       type: "performance",
-      description: `Frame budget not enforced on software WebGL renderer: ${renderer}`,
+      description: `Recorded frame timing on a software or virtual WebGL renderer: ${renderer}`,
     });
     expect(samples.length).toBeGreaterThan(2);
   } else {
