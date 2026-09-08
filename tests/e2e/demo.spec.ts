@@ -962,7 +962,7 @@ test("applies independent furniture layers and keeps them across nodes", async (
 test("authors and exports hotspots and links", async ({ page, context }) => {
   test.setTimeout(120_000);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/?tour=italian-flat&author=1");
+  await page.goto("/?tour=italian-flat&author=1&test=1");
   await expect(page.getByText("MeshTour author mode", { exact: true })).toBeVisible();
   const wireframe = page.getByLabel("Show proxy wireframe");
   await wireframe.check();
@@ -987,9 +987,13 @@ test("authors and exports hotspots and links", async ({ page, context }) => {
   const authoredHotspot = afterHotspot.hotspots.at(-1);
   expect(authoredHotspot.node).toBe("living");
 
-  await page.mouse.move(scenePoint.x, scenePoint.y);
+  const hotspotPoint = await page.evaluate((position: [number, number, number]) => {
+    return window.__MESHTOUR_TEST_ENGINE__!.worldToScreen(position);
+  }, authoredHotspot.position);
+  expect(hotspotPoint.visible).toBe(true);
+  await page.mouse.move(box!.x + hotspotPoint.x, box!.y + hotspotPoint.y);
   await page.mouse.down();
-  await page.mouse.move(scenePoint.x + 70, scenePoint.y + 25, { steps: 5 });
+  await page.mouse.move(box!.x + hotspotPoint.x + 70, box!.y + hotspotPoint.y + 25, { steps: 5 });
   await page.mouse.up();
   await expect(page.getByText(/moved hs_/)).toBeVisible();
   const afterHotspotDrag = await copyJson();
@@ -1080,11 +1084,16 @@ test("opens hotspots and emits mesh interaction ids", async ({ page }) => {
     engine.setHotspotsVisible(false);
     engine.lookAt([2.15, 0.65, -7]);
   });
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  // Move off the target first so Chromium sends a pointermove even if the
+  // pointer is already at the middle of the canvas after closing the popup.
+  const x = box!.x + box!.width / 2;
+  const y = box!.y + box!.height / 2;
+  await page.mouse.move(x + 20, y);
+  await page.mouse.move(x, y);
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_EVENTS__!.hovered))
     .toMatch(/^sofa/);
-  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.click(x, y);
   await expect
     .poll(() => page.evaluate(() => window.__MESHTOUR_TEST_EVENTS__!.clicked))
     .toMatch(/^sofa/);
