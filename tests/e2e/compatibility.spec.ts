@@ -8,6 +8,7 @@ test("loads and navigates with WebGL2 across supported browser engines", async (
     if (message.type() === "error") errors.push(message.text());
   });
 
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/?tour=italian-flat", { waitUntil: "domcontentloaded" });
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
