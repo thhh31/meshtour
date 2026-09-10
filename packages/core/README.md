@@ -31,8 +31,8 @@ TypeScript types and supports ESM and CommonJS.
 - `enterVR()` starts a WebXR session on a compatible headset. Call it from a
   click or tap, on HTTPS or localhost.
 
-[Tour config](https://github.com/thhh31/meshtour-public/blob/main/docs/CONFIG.md) ·
-[Blender export guide](https://github.com/thhh31/meshtour-public/blob/main/assets-pipeline/BLENDER.md) ·
+[Tour config](https://github.com/thhh31/meshtour/blob/main/docs/CONFIG.md) ·
+[Blender export guide](https://github.com/thhh31/meshtour/blob/main/assets-pipeline/BLENDER.md) ·
 [React bindings](https://www.npmjs.com/package/@meshtour/react)
 
 License: MIT.

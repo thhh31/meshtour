@@ -8,7 +8,7 @@ MeshTour is a Three.js library for walking between 360° panoramas. It projects
 the images onto a mesh of the room so nearby objects shift as the camera moves
 and walls can hide hotspots.
 
-[Try Italian Flat](https://thhh31.github.io/meshtour-public/) ·
+[Try Italian Flat](https://thhh31.github.io/meshtour/) ·
 [Tour config](docs/CONFIG.md) ·
 [Blender export guide](assets-pipeline/BLENDER.md)
 

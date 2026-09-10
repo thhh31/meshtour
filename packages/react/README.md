@@ -30,7 +30,7 @@ Use these hooks inside `<Tour>` to build your own controls:
 - `useTourConfiguration()` for finish selection, presets, and share links.
 
 `onReady` receives the core engine. See the
-[config reference](https://github.com/thhh31/meshtour-public/blob/main/docs/CONFIG.md)
+[config reference](https://github.com/thhh31/meshtour/blob/main/docs/CONFIG.md)
 for the asset format and guide and finish options.
 
 License: MIT.
