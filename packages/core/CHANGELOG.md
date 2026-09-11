@@ -1,5 +1,10 @@
 # @meshtour/core
 
+## 1.0.0
+
+- Document the 1.x viewer API and keep existing v1 tour files compatible.
+- Resolve the correct TypeScript declarations for CommonJS and ES module imports.
+
 ## 0.2.0
 
 - Use Zod 4.6.7 or newer for tour validation to address

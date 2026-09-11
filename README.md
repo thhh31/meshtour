@@ -9,6 +9,7 @@ the images onto a mesh of the room so nearby objects shift as the camera moves
 and walls can hide hotspots.
 
 [Try Italian Flat](https://meshtour-demo.vercel.app/) ·
+[API](docs/API.md) ·
 [Tour config](docs/CONFIG.md) ·
 [Blender export guide](assets-pipeline/BLENDER.md)
 
@@ -33,6 +34,8 @@ const tour = new TourEngine({
 
 await tour.start();
 ```
+
+Call `tour.dispose()` when you remove the viewer.
 
 A tour config points to a GLB mesh and a panorama for each viewpoint.
 See the [bundled tour](apps/demo/public/tours/italian-flat/tour.json) for an example.

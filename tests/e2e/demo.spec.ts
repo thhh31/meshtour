@@ -56,6 +56,24 @@ test("loads the latest Italian Flat by default and accepts an alternate tour URL
   ).toBeVisible();
 });
 
+test("shows a load error when WebGL is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
+      apply(target, canvas, [contextType, ...options]) {
+        if (contextType === "webgl2" || contextType === "webgl") return null;
+        return Reflect.apply(target, canvas, [contextType, ...options]);
+      },
+    });
+  });
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("The tour could not be loaded.");
+  await expect(page.getByRole("alert")).toContainText(/WebGL/i);
+  expect(pageErrors).toEqual([]);
+});
+
 test("opens the demo material selector and changes flooring", async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto("/?test=1");

@@ -84,6 +84,7 @@ try {
           target: "ES2022",
           module: "NodeNext",
           moduleResolution: "NodeNext",
+          verbatimModuleSyntax: true,
           jsx: "react-jsx",
           strict: true,
           noEmit: true,
@@ -120,6 +121,19 @@ export function Consumer() {
 }
 
 void engineTypecheck;
+`,
+  );
+  await write(
+    "src/consumer.cts",
+    `import core = require("@meshtour/core");
+import react = require("@meshtour/react");
+
+const config: core.TourConfigInput = {
+  version: 1,
+  nodes: [{ id: "room", position: [0, 1.6, 0], panorama: { url: "room.jpg" } }],
+};
+const props: react.TourProps = { config: core.validateConfig(config) };
+void props;
 `,
   );
   await write(

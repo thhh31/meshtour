@@ -26,7 +26,15 @@ pnpm packages:verify
 ```
 
 `pnpm packages:verify` installs the packed packages in a separate consumer
-project and checks their ESM, CommonJS, and TypeScript entry points.
+project and checks their ESM and CommonJS entry points, TypeScript declarations
+and React server rendering. Run `pnpm test:e2e` for browser checks and
+`pnpm audit --prod` for runtime dependencies.
+
+For a manual release, pack with `pnpm --dir packages/core pack` and
+`pnpm --dir packages/react pack` so the React package resolves its Core peer
+to the release version. Stage both tarballs with `npm stage publish` and approve
+Core before React. Use `--tag next` for release candidates. Verify a fresh npm
+install and tag the source commit after both versions are public.
 
 ## Publish through Changesets
 

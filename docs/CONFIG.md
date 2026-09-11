@@ -480,4 +480,6 @@ above are applied on parse.
 
 ## Stability
 
-The v1 schema is **append-only**: future releases may add optional fields but will not change the meaning of existing ones. A `version: 2` would only ship with a published migration.
+MeshTour 1.x continues to accept v1 tour JSON. New fields are optional, and
+existing fields and their defaults keep their meaning. See the [API](API.md)
+for loading, validating and rendering tour files.

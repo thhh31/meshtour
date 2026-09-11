@@ -180,14 +180,25 @@ export function Tour(props: TourProps): ReactNode {
     const container = containerRef.current;
     if (!container) return;
 
-    const tourEngine = new TourEngine({
-      container,
-      config,
-      initialNode,
-      authorMode,
-      defaultPopups: !hasCustomPopups,
-      ...engineOptions,
-    });
+    const reportError = (err: Error) => {
+      setError(err);
+      callbacksRef.current.onError?.(err);
+    };
+
+    let tourEngine: TourEngine;
+    try {
+      tourEngine = new TourEngine({
+        container,
+        config,
+        initialNode,
+        authorMode,
+        defaultPopups: !hasCustomPopups,
+        ...engineOptions,
+      });
+    } catch (cause) {
+      reportError(cause instanceof Error ? cause : new Error(String(cause)));
+      return () => setError(null);
+    }
 
     tourEngine.on("ready", () => {
       setReady(true);
@@ -197,10 +208,7 @@ export function Tour(props: TourProps): ReactNode {
       setCustomMeasurement(tourEngine.getCustomMeasurement());
       callbacksRef.current.onReady?.(tourEngine);
     });
-    tourEngine.on("error", ({ error: err }) => {
-      setError(err);
-      callbacksRef.current.onError?.(err);
-    });
+    tourEngine.on("error", ({ error: err }) => reportError(err));
     tourEngine.on("nodechange", ({ from, to }) => {
       setCurrentNode(to);
       setPopup(null);
