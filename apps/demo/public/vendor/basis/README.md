@@ -43,4 +43,4 @@ ktx2Loader.load( 'diffuse.ktx2', function ( texture ) {
 
 ## License
 
-[Apache License 2.0](https://github.com/BinomialLLC/basis_universal/blob/master/LICENSE)
+[Apache License 2.0](LICENSE.txt)

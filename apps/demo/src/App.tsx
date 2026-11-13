@@ -347,6 +347,14 @@ export function App() {
         );
       }}
     >
+      <a
+        className="scene-credit"
+        href={`./tours/${tourId}/ATTRIBUTION.md`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Italian Flat by Flavio Della Tommasa · CC BY
+      </a>
       <TourSpatialControls />
       <TourGuidedControls />
       <NodeSwitcher nodes={activeTour.points} />

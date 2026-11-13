@@ -2,6 +2,26 @@
   display: none;
 }
 
+.scene-credit {
+  position: absolute;
+  z-index: 42;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  max-width: calc(100% - 110px);
+  padding: 5px 9px;
+  border-radius: 6px;
+  color: #fff;
+  background: rgba(9, 10, 14, 0.8);
+  font-size: 11px;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.scene-credit:hover,
+.scene-credit:focus-visible {
+  text-decoration: underline;
+}
+
 .materials-panel-launcher {
   position: absolute;
   z-index: 48;

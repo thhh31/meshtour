@@ -172,7 +172,10 @@ if (!html.includes("position:relative")) throw new Error("CommonJS React SSR out
       encoding: "utf8",
     }),
   );
-  if (packedReact.peerDependencies["@meshtour/core"] !== "^0.1.0") {
+  const { version: coreVersion } = JSON.parse(
+    await readFile(path.join(projectRoot, "packages/core/package.json"), "utf8"),
+  );
+  if (packedReact.peerDependencies["@meshtour/core"] !== `^${coreVersion}`) {
     throw new Error("Packed React package did not rewrite its workspace core peer");
   }
 

@@ -167,7 +167,7 @@ export const interactablesSchema = z.object({
       color: z.string().default("#ffffff"),
       opacity: z.number().min(0).max(1).default(0.12),
     })
-    .default({}),
+    .prefault({}),
 });
 export type InteractablesConfig = z.infer<typeof interactablesSchema>;
 
@@ -255,7 +255,7 @@ export const spatialSchema = z.object({
       /** Additional proxy object names to omit from plan/top rendering. */
       hiddenMeshes: z.array(z.string().min(1)).default([]),
     })
-    .default({}),
+    .prefault({}),
   measurementColor: z.string().min(1).default("#ffffff"),
   measurements: z.array(measurementSchema).default([]),
 });
@@ -272,7 +272,7 @@ export const configurableVariantSchema = z.object({
    * rendered from the same capture position/orientation as that node's panorama.
    * Missing nodes fall back to the original panorama appearance.
    */
-  layers: z.record(z.string().min(1)).default({}),
+  layers: z.record(z.string(), z.string().min(1)).default({}),
 });
 export type ConfigurableVariantConfig = z.infer<typeof configurableVariantSchema>;
 
@@ -304,10 +304,10 @@ export const configurationOptionSchema = z.object({
   priceDeltaMinor: z.number().int().default(0),
   availability: z.enum(["available", "on-request", "unavailable"]).default("available"),
   /** Low-level configurable id to visual variant id. */
-  variants: z.record(z.string().min(1)).default({}),
+  variants: z.record(z.string(), z.string().min(1)).default({}),
   requires: z.array(configurationDependencySchema).default([]),
   excludes: z.array(configurationDependencySchema).default([]),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 export type ConfigurationOptionConfig = z.infer<typeof configurationOptionSchema>;
 
@@ -326,7 +326,7 @@ export const configurationPresetSchema = z.object({
   label: z.string().min(1),
   description: z.string().optional(),
   badge: z.string().optional(),
-  selections: z.record(z.string().min(1)),
+  selections: z.record(z.string(), z.string().min(1)),
 });
 export type ConfigurationPresetConfig = z.infer<typeof configurationPresetSchema>;
 
@@ -382,7 +382,7 @@ export const guideStepSchema = z.object({
   view: guideViewSchema,
   measurementsVisible: z.boolean().default(false),
   /** Configurable id to variant id. Omitted configurables retain their current selection. */
-  variants: z.record(z.string().min(1)).default({}),
+  variants: z.record(z.string(), z.string().min(1)).default({}),
   /** Override the guide's autoplay dwell for this step. */
   durationMs: z.number().int().min(3_000).max(120_000).optional(),
 });
@@ -415,9 +415,9 @@ export const tourConfigSchema = z
     name: z.string().optional(),
     units: z.literal("meters").default("meters"),
     assets: assetsSchema.default({}),
-    rendering: renderingSchema.default({}),
-    interactables: interactablesSchema.default({}),
-    spatial: spatialSchema.default({}),
+    rendering: renderingSchema.prefault({}),
+    interactables: interactablesSchema.prefault({}),
+    spatial: spatialSchema.prefault({}),
     configurables: z.array(configurableSchema).default([]),
     configurator: configuratorSchema.optional(),
     /** Optional interactive, authored property stories. */
