@@ -1,8 +1,19 @@
 # Releasing MeshTour
 
 `@meshtour/core` and `@meshtour/react` are published on npm. The
-[Demo Pages workflow](../.github/workflows/demo-pages.yml) builds the demo from
-`main` and deploys it when GitHub Pages is enabled.
+[Italian Flat demo](https://meshtour-demo.vercel.app/) runs on Vercel and can
+stay public while the source repository is private.
+
+## Deploy the demo
+
+The Vercel project is `meshtour-demo`, connected to `thhh31/meshtour` on `main`.
+It builds with Node.js 22 from `apps/demo`, with files outside that directory
+included for the workspace packages. The build command and output directory
+are set in [vercel.json](../apps/demo/vercel.json).
+
+The [Demo Pages workflow](../.github/workflows/demo-pages.yml) is an optional
+deployment for a public repository. It skips private repositories because
+GitHub Pages on the Free plan requires a public source repository.
 
 ## Check the packages
 
